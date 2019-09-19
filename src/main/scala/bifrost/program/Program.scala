@@ -14,13 +14,9 @@ import scala.language.existentials
 /**
   *
   * @param owner              Public key allowed to interact with the program
-  * @param lastUpdated        timestamp of last update made to the program
-  * @param id                 Unique identifier
   * @param executionBuilder   Context for the state and code to execute methods on the program
   */
 case class Program(owner: Map[PublicKey25519Proposition, String],
-                   lastUpdated: Long,
-                   id: Array[Byte],
                    executionBuilder: Json) {
 
   val executionBuilderObj: ExecutionBuilder = executionBuilder.as[ExecutionBuilder] match {
@@ -35,8 +31,6 @@ case class Program(owner: Map[PublicKey25519Proposition, String],
         Base58.encode(p._1.pubKeyBytes) -> p._2.asJson
       })
       .asJson,
-    "lastUpdated" -> lastUpdated.asJson,
-    "id" -> Base58.encode(id).asJson
   ).asJson
 
 }
@@ -64,8 +58,6 @@ object Program {
 
     new Program(
       parties,
-      jsonMap("lastUpdated").asNumber.get.toLong.getOrElse(0L),
-      id,
       jsonMap("executionBuilder")
     )
   }

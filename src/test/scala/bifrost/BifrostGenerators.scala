@@ -366,24 +366,10 @@ trait BifrostGenerators extends CoreGenerators {
   lazy val signatureGen: Gen[Signature25519] = genBytesList(Signature25519.SignatureSize).map(Signature25519(_))
 
   lazy val programGen: Gen[Program] = for {
-    producer <- propositionGen
     investor <- propositionGen
-    hub <- propositionGen
-    storage <- jsonGen()
-    status <- jsonGen()
     executionBuilder <- validExecutionBuilderGen().map(_.json)
-    id <- genBytesList(FastCryptographicHash.DigestSize)
   } yield {
-    Program(Map(
-      "parties" -> Map(
-        Base58.encode(producer.pubKeyBytes) -> "producer",
-        Base58.encode(investor.pubKeyBytes) -> "investor",
-        Base58.encode(hub.pubKeyBytes) -> "hub"
-      ).asJson,
-      "storage" -> Map("status" -> status, "other" -> storage).asJson,
-      "executionBuilder" -> executionBuilder,
-      "lastUpdated" -> System.currentTimeMillis().asJson
-    ).asJson, id)
+    Program(Map(PublicKey25519Proposition(investor.pubKeyBytes) -> "investor"), executionBuilder)
   }
 
   def preFeeBoxGen(minFee: Long = 0, maxFee: Long = Long.MaxValue): Gen[(Nonce, Long)] = for {
