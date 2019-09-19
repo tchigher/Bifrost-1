@@ -1,7 +1,7 @@
 package bifrost.program
 
 
-import bifrost.exceptions.{InvalidProvidedProgramArgumentsException, JsonParsingException}
+import bifrost.exceptions.JsonParsingException
 import bifrost.transaction.box.{CodeBox, StateBox}
 import io.circe._
 import io.circe.syntax._
@@ -9,7 +9,6 @@ import org.graalvm.polyglot.{Context, Value}
 import bifrost.transaction.box.proposition.PublicKey25519Proposition
 import scorex.crypto.encode.Base58
 
-import scala.util.Try
 import scala.language.existentials
 
 /**
@@ -24,30 +23,10 @@ case class Program(parties: Map[PublicKey25519Proposition, String],
                    id: Array[Byte],
                    executionBuilder: Json) {
 
-  val MIN_PARTIES: Int = 2
-  val MAX_PARTIES: Int = 1024
-
-  if (parties.size < MIN_PARTIES || parties.size > MAX_PARTIES) {
-    throw new InvalidProvidedProgramArgumentsException("An invalid number of parties was specified for the program " +
-      "(must be between 2 and 1024).")
-  }
-
-  val jsre: Context = Context.create("js")
-
-
   val executionBuilderObj: ExecutionBuilder = executionBuilder.as[ExecutionBuilder] match {
     case Right(a) => a
     case Left(_) => throw new JsonParsingException("Was unable to parse a valid executionBuilder from provided JSON")
   }
-
-  jsre.eval("js", ProgramPreprocessor.objectAssignPolyfill)
-
-  //noinspection ScalaStyle
-  def applyFunction(methodName: String)(args: JsonObject)(params: Array[String])/*: Try[(Program, Option[Json])]*/ = Try {
-
-
-
-    }
 
   lazy val json: Json = Map(
     "executionBuilder" -> executionBuilder,
@@ -182,7 +161,9 @@ object Program {
         case _ => throw new NoSuchElementException(s"""Element "${variable._1}" does not exist in program state """)
       }
     else
-      throw new ClassCastException(s"""Updated state variable ${member} with type ${memberType} does not match original variable type of ${variable._2.name}""")
+      throw new ClassCastException(
+        s"""Updated state variable $member with type $memberType
+           | does not match original variable type of ${variable._2.name}""".stripMargin)
   }
 
   private def createProgramInterface(codeBoxes: Seq[CodeBox]): Map[String, Seq[String]] = {
