@@ -13,12 +13,12 @@ import scala.language.existentials
 
 /**
   *
-  * @param parties            Public keys allowed to interact with the program
+  * @param owner              Public key allowed to interact with the program
   * @param lastUpdated        timestamp of last update made to the program
   * @param id                 Unique identifier
   * @param executionBuilder   Context for the state and code to execute methods on the program
   */
-case class Program(parties: Map[PublicKey25519Proposition, String],
+case class Program(owner: Map[PublicKey25519Proposition, String],
                    lastUpdated: Long,
                    id: Array[Byte],
                    executionBuilder: Json) {
@@ -30,7 +30,7 @@ case class Program(parties: Map[PublicKey25519Proposition, String],
 
   lazy val json: Json = Map(
     "executionBuilder" -> executionBuilder,
-    "parties" -> parties
+    "owner" -> owner
       .map(p => {
         Base58.encode(p._1.pubKeyBytes) -> p._2.asJson
       })
@@ -63,7 +63,7 @@ object Program {
     }
 
     new Program(
-      parties, // TODO #22 new PublicKey25519Proposition(Base58.decode(jsonMap("producer").asString.get).get),
+      parties,
       jsonMap("lastUpdated").asNumber.get.toLong.getOrElse(0L),
       id,
       jsonMap("executionBuilder")

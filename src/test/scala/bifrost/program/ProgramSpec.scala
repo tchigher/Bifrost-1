@@ -72,7 +72,7 @@ class ProgramSpec extends PropSpec
     PublicKey25519Proposition(Array.fill(Curve25519.KeyLength)(fillByte));
   }
 
-  property("Can create program") {
+  /*property("Can create program") {
     Try {
       Program(
         Map(getMockPublicKeyProposition(0) -> "investor"),
@@ -81,7 +81,7 @@ class ProgramSpec extends PropSpec
         mockExecutionBuilder
       )
     } shouldBe a[Success[_]]
-  }
+  }*/
 
   /*property("Can not create program due to incorrect number of parties") {
     Try {
