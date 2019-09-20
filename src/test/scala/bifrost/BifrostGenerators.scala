@@ -369,7 +369,7 @@ trait BifrostGenerators extends CoreGenerators {
     investor <- propositionGen
     executionBuilder <- validExecutionBuilderGen().map(_.json)
   } yield {
-    Program(Map(PublicKey25519Proposition(investor.pubKeyBytes) -> "investor"), executionBuilder)
+    Program(PublicKey25519Proposition(investor.pubKeyBytes), executionBuilder)
   }
 
   def preFeeBoxGen(minFee: Long = 0, maxFee: Long = Long.MaxValue): Gen[(Nonce, Long)] = for {

@@ -16,7 +16,7 @@ import scala.language.existentials
   * @param owner              Public key allowed to interact with the program
   * @param executionBuilder   Context for the state and code to execute methods on the program
   */
-case class Program(owner: Map[PublicKey25519Proposition, String],
+case class Program(owner: PublicKey25519Proposition,
                    executionBuilder: Json) {
 
   val executionBuilderObj: ExecutionBuilder = executionBuilder.as[ExecutionBuilder] match {
@@ -26,11 +26,7 @@ case class Program(owner: Map[PublicKey25519Proposition, String],
 
   lazy val json: Json = Map(
     "executionBuilder" -> executionBuilder,
-    "owner" -> owner
-      .map(p => {
-        Base58.encode(p._1.pubKeyBytes) -> p._2.asJson
-      })
-      .asJson,
+    "owner" -> Base58.encode(owner.pubKeyBytes).asJson,
   ).asJson
 
 }
@@ -43,21 +39,20 @@ object Program {
       .map(_.toMap)
       .get
 
-    val parties: Map[PublicKey25519Proposition, String] = jsonMap("parties").asObject match {
-      case Some(partiesObject) =>
-        partiesObject
+    val owner: PublicKey25519Proposition = jsonMap("owner").asObject match {
+      case Some(ownerObject) =>
+        ownerObject
           .toMap
           .map {
             party =>
               val publicKey = Base58.decode(party._1).get
-              val role = party._2.asString.get
-              new PublicKey25519Proposition(publicKey) -> role
-          }
+              new PublicKey25519Proposition(publicKey)
+          }.head
       case None => throw new JsonParsingException(s"Error: ${jsonMap("parties")}")
     }
 
     new Program(
-      parties,
+      owner,
       jsonMap("executionBuilder")
     )
   }

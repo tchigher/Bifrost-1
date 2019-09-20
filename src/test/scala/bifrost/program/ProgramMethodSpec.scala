@@ -24,7 +24,7 @@ class ProgramMethodSpec extends PropSpec
         val party = propositionGen.sample.get
         val params = JsonObject.empty
 
-        val prop = c.owner.head._1
+        val prop = c.owner
 
         val state = c.executionBuilderObj.core.variables
 
@@ -50,7 +50,7 @@ class ProgramMethodSpec extends PropSpec
     forAll(programGen) {
       c: Program => {
 
-        val prop = c.owner.head._1
+        val prop = c.owner
 
         val state = c.executionBuilderObj.core.variables
 
@@ -124,7 +124,7 @@ class ProgramMethodSpec extends PropSpec
         val party = propositionGen.sample.get
         val params = JsonObject.empty
 
-        val prop = c.owner.head._1
+        val prop = c.owner
 
         val state = c.executionBuilderObj.core.variables
 
@@ -192,7 +192,7 @@ class ProgramMethodSpec extends PropSpec
 
         val params = JsonObject.fromMap(Map("a" -> "2".asJson, "b" -> "2".asJson))
 
-        val prop = c.owner.head._1
+        val prop = c.owner
 
         val state = c.executionBuilderObj.core.variables
 
