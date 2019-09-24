@@ -5,8 +5,6 @@ import java.util.UUID
 import bifrost.program.Program
 import bifrost.crypto.hash.FastCryptographicHash
 import BifrostTransaction.Nonce
-import bifrost.forging.ForgingSettings
-import bifrost.history.BifrostHistory
 import bifrost.programBoxRegistry.ProgramBoxRegistry
 import bifrost.transaction.box._
 import bifrost.transaction.box.proposition.{ProofOfKnowledgeProposition, PublicKey25519Proposition}
@@ -34,27 +32,7 @@ case class ProgramMethodExecution(state: Seq[StateBox],
 
   override type M = ProgramMethodExecution
 
-  val proposition = executionBox.proposition
-
-
-  // TODO Fix instantiation to handle runtime input and/or extract to a better location
-  val forgingSettings = new ForgingSettings {
-    override def settingsJSON: Map[String, Json] = super.settingsFromFile("testSettings.json")
-  }
-
-  //TODO do not readOrGenerate programBoxRegistry here
-  //ProgramBoxRegistry should be taken from nodeView at api level and passed as parameter to static function in companion object
-  //Static function should extract necessary boxes and use those as methodParams to transaction class
-  //See static create function in companion object below
-
-  val history = BifrostHistory.readOrGenerate(forgingSettings)
-  val pbr: ProgramBoxRegistry = ProgramBoxRegistry.readOrGenerate(forgingSettings, history.storage.storage).get
-
-  //val uuidStateBoxes = executionBox.stateBoxUUIDs.map(v => programBoxRegistry.getBox(v).get.asInstanceOf[StateBox])
-
-  val codeBoxes = executionBox.codeBoxIds
-
-  //lazy val stateBoxIds: IndexedSeq[Array[Byte]] = IndexedSeq(state.head._1.id)
+  val proposition: PublicKey25519Proposition = executionBox.proposition
 
   lazy val boxIdsToOpen: IndexedSeq[Array[Byte]] = feeBoxIdKeyPairs.map(_._1)
 
@@ -64,7 +42,7 @@ case class ProgramMethodExecution(state: Seq[StateBox],
     override val boxKey: Signature25519 = signatures.getOrElse(owner, throw new Exception("Signature not provided"))
   }) ++ feeBoxUnlockers
 
-  lazy val hashNoNonces = FastCryptographicHash(
+  lazy val hashNoNonces: Array[Byte] = FastCryptographicHash(
     executionBox.id ++
       methodName.getBytes ++
       owner.pubKeyBytes ++
@@ -75,7 +53,6 @@ case class ProgramMethodExecution(state: Seq[StateBox],
   )
 
   override lazy val newBoxes: Traversable[BifrostBox] = {
-//    val digest = FastCryptographicHash(MofNPropositionSerializer.toBytes(proposition) ++ hashNoNonces)
     val digest = FastCryptographicHash(proposition.pubKeyBytes ++ hashNoNonces)
 
     val nonce = ProgramTransaction.nonceFromDigest(digest)
