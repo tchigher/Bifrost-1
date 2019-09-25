@@ -55,23 +55,7 @@ case class ProgramMethodExecution(state: Seq[StateBox],
   var oldStateBox: Option[StateBox] = None
   var newStateBox: Option[StateBox] = None
 
-  override lazy val newBoxes: Traversable[BifrostBox] = {
-    val digest = FastCryptographicHash(proposition.pubKeyBytes ++ hashNoNonces)
-
-    val nonce = ProgramTransaction.nonceFromDigest(digest)
-
-    try {
-      Program.execute(state, code, methodName)(owner)(methodParams.asObject.get)
-    } catch {
-      case e: Exception => throw e.getCause
-    }
-
-    val programResult: Json = Program.execute(state, code, methodName)(owner)(methodParams.asObject.get)
-
-    val updatedStateBox: StateBox = StateBox(owner, nonce, state.head.value, programResult)
-
-    IndexedSeq(updatedStateBox) ++ deductedFeeBoxes(hashNoNonces)
-  }
+  override lazy val newBoxes: Traversable[BifrostBox] = deductedFeeBoxes(hashNoNonces)
 
   lazy val json: Json = (commonJson.asObject.get.toMap ++ Map(
     "state" -> state.map {
