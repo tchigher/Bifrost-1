@@ -2,6 +2,7 @@ package bifrost.state
 
 import java.io.File
 import java.time.Instant
+import java.util.UUID
 
 import bifrost.tokenBoxRegistry.TokenBoxRegistry
 import bifrost.history.BifrostHistory
@@ -14,6 +15,7 @@ import com.google.common.primitives.Longs
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import bifrost.crypto.hash.FastCryptographicHash
 import bifrost.forging.ForgingSettings
+import bifrost.program.Program
 import bifrost.programBoxRegistry.ProgramBoxRegistry
 import bifrost.transaction.bifrostTransaction.{AssetRedemption, _}
 import bifrost.transaction.box.proposition.{ProofOfKnowledgeProposition, PublicKey25519Proposition}
@@ -404,7 +406,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
     //TODO get execution box from box registry using UUID before using its actual id to get it from storage
     val executionBoxBytes = storage.get(ByteArrayWrapper(pme.executionBox.id))
 
-    /* Program exists */
+    // Program exists
     if (executionBoxBytes.isEmpty) {
       throw new TransactionValidationException(s"Program ${Base58.encode(pme.executionBox.id)} does not exist")
     }
@@ -412,19 +414,12 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
     val executionBox: ExecutionBox = ExecutionBoxSerializer.parseBytes(executionBoxBytes.get.data).get
     val programProposition: PublicKey25519Proposition =  executionBox.proposition
 
-    /* This person belongs to program */
+    // This person belongs to program
     if (!MultiSignature25519(pme.signatures.values.toSet).isValid(programProposition, pme.messageToSign)) {
       throw new TransactionValidationException(s"Signature is invalid for ExecutionBox")
     }
 
-    //TODO check that one of the boxIds to remove is a state box and was present in the ProgramBoxRegistry
-    //TODO Remember that for each pme, exactly one state box would be consumed and exactly one would be created
 
-//    pme.unlockers.foreach(unlocker =>
-//      if(closedBox(unlocker.closedBoxId)).isInstanceOf[StateBox] {
-//      return true
-//    })
-//
     val unlockersValid: Try[Unit] = pme.unlockers
       .foldLeft[Try[Unit]](Success())((unlockersValid, unlocker) =>
       unlockersValid
@@ -441,10 +436,21 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
         }
     )
 
+    // Build program state and execute transition
+    val state: Seq[StateBox] = executionBox.stateBoxUUIDs.map(sb => pbr.getBox(sb).get.asInstanceOf[StateBox])
+    val code: Seq[CodeBox] = executionBox.codeBoxIds.map(cb => closedBox(cb).get.asInstanceOf[CodeBox])
+
+    val newState = Program.execute(state, code, pme.methodName)(pme.owner)(pme.methodParams.asObject.get)
+
+    val stateNonce = ProgramTransaction.nonceFromDigest(pme.owner.pubKeyBytes ++ pme.hashNoNonces)
+    val stateUUID = UUID.nameUUIDFromBytes(StateBox.idFromBox(pme.owner, stateNonce))
+    pme.oldStateBox = Some(pbr.getBox(executionBox.stateBoxUUIDs.head).get.asInstanceOf[StateBox])
+    pme.newStateBox = Some(StateBox(pme.owner, stateNonce, stateUUID,newState))
 
     val statefulValid = unlockersValid flatMap { _ =>
       //Checks that newBoxes being created don't already exist
-      val boxesAreNew = pme.newBoxes.forall(curBox => storage.get(ByteArrayWrapper(curBox.id)) match {
+      val allNewBoxes = pme.newStateBox ++ pme.newBoxes
+      val boxesAreNew = allNewBoxes.forall(curBox => storage.get(ByteArrayWrapper(curBox.id)) match {
         case Some(_) => false
         case None => true
       })
@@ -455,7 +461,6 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
         Failure(new TransactionValidationException("ProgramCreation attempts to overwrite existing program"))
       }
     }
-
 
     statefulValid.flatMap(_ => semanticValidity(pme))
   }
@@ -587,7 +592,14 @@ object BifrostState extends ScorexLogging {
     val gen = mod.forgerBox.proposition
 
     val boxDeltas: Seq[(Set[Array[Byte]], Set[BX], Long)] = mod.transactions match {
-      case Some(txSeq) => txSeq.map(tx => (tx.boxIdsToOpen.toSet, tx.newBoxes.toSet, tx.fee))
+      case Some(txSeq) => txSeq.map {
+        case pme: ProgramMethodExecution => {
+          val toRemove: Set[Array[Byte]] = (pme.oldStateBox.get.id +: pme.boxIdsToOpen).toSet
+          val toAdd: Set[BX] = (pme.newStateBox ++ pme.newBoxes).toSet
+          (toRemove, toAdd, pme.fee)
+        }
+        case tx => (tx.boxIdsToOpen.toSet, tx.newBoxes.toSet, tx.fee)
+      }
     }
 
     val (toRemove: Set[Array[Byte]], toAdd: Set[BX], reward: Long) =
