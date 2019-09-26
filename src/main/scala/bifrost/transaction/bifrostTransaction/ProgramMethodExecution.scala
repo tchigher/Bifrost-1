@@ -2,7 +2,6 @@ package bifrost.transaction.bifrostTransaction
 
 import java.util.UUID
 
-import bifrost.program.Program
 import bifrost.crypto.hash.FastCryptographicHash
 import BifrostTransaction.Nonce
 import bifrost.programBoxRegistry.ProgramBoxRegistry
@@ -17,9 +16,7 @@ import io.circe.syntax._
 
 import scala.util.Try
 
-case class ProgramMethodExecution(state: Seq[StateBox],
-                                  code: Seq[CodeBox],
-                                  executionBox: ExecutionBox,
+case class ProgramMethodExecution(executionBox: ExecutionBox,
                                   methodName: String,
                                   methodParams: Json,
                                   owner: PublicKey25519Proposition,
@@ -58,12 +55,6 @@ case class ProgramMethodExecution(state: Seq[StateBox],
   override lazy val newBoxes: Traversable[BifrostBox] = deductedFeeBoxes(hashNoNonces)
 
   lazy val json: Json = (commonJson.asObject.get.toMap ++ Map(
-    "state" -> state.map {
-      sb => sb.json
-    }.asJson,
-    "code" -> code.map {
-      cb => cb.json
-    }.asJson,
     "methodName" -> methodName.asJson,
     "methodParams" -> methodParams,
     "newBoxes" -> newBoxes.map {
@@ -105,10 +96,7 @@ object ProgramMethodExecution {
              timestamp: Long,
              data: String): Try[ProgramMethodExecution] = Try {
     val execBox = pbr.getBox(uuid).get.asInstanceOf[ExecutionBox]
-    val state: Seq[StateBox] = execBox.stateBoxUUIDs.map(sb => pbr.getBox(sb).get.asInstanceOf[StateBox])
-    //val codeBox = programBoxRegistry.getBox(UUID.nameUUIDFromBytes(execBox.codeBoxIds.head)).get.asInstanceOf[CodeBox]
-    val code: Seq[CodeBox] = execBox.codeBoxIds.map(cb => pbr.getBox(UUID.nameUUIDFromBytes(cb)).get.asInstanceOf[CodeBox])
-    ProgramMethodExecution(state, code, execBox, methodName, methodParams, owner, signatures, preFeeBoxes, fees, timestamp, data)
+    ProgramMethodExecution(execBox, methodName, methodParams, owner, signatures, preFeeBoxes, fees, timestamp, data)
   }
 
   def validate(tx: ProgramMethodExecution): Try[Unit] = Try {
@@ -119,8 +107,6 @@ object ProgramMethodExecution {
   }.flatMap(_ => ProgramTransaction.commonValidation(tx))
 
   implicit val decodeProgramMethodExecution: Decoder[ProgramMethodExecution] = (c: HCursor) => for {
-    state <- c.downField("state").as[Seq[StateBox]]
-    code <- c.downField("code").as[Seq[CodeBox]]
     executionBox <- c.downField("executionBox").as[ExecutionBox]
     methodName <- c.downField("methodName").as[String]
     methodParams <- c.downField("methodParams").as[Json]
@@ -133,8 +119,6 @@ object ProgramMethodExecution {
   } yield {
     val commonArgs = ProgramTransaction.commonDecode(rawOwner, rawSignatures, rawPreFeeBoxes, rawFees)
     ProgramMethodExecution(
-      state,
-      code,
       executionBox,
       methodName,
       methodParams,

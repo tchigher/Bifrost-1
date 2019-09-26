@@ -434,8 +434,6 @@ trait BifrostGenerators extends CoreGenerators {
       Seq("inc = function() { a += 1; }"), Map("inc" -> Seq()))
 
     ProgramMethodExecution(
-      Seq(state),
-      Seq(code),
       executionBox,
       methodName,
       parameters,

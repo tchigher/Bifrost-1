@@ -4,7 +4,7 @@ import bifrost.serialization.Serializer
 import bifrost.transaction.bifrostTransaction.BifrostTransaction.Nonce
 import bifrost.transaction.bifrostTransaction
 import bifrost.transaction.bifrostTransaction.ProgramMethodExecution
-import bifrost.transaction.box.{CodeBox, CodeBoxSerializer, ExecutionBox, ExecutionBoxSerializer, StateBox, StateBoxSerializer}
+import bifrost.transaction.box.ExecutionBoxSerializer
 import bifrost.transaction.box.proposition.PublicKey25519Proposition
 import bifrost.transaction.proof.Signature25519
 import com.google.common.primitives.{Bytes, Ints}
@@ -26,13 +26,9 @@ object ProgramMethodExecutionCompanion extends Serializer[ProgramMethodExecution
       /* First two arguments MUST STAY */
       Ints.toByteArray(typeBytes.length),
       typeBytes,
-      Ints.toByteArray(cme.state.length),
-      Ints.toByteArray(cme.code.length),
       Ints.toByteArray(cme.executionBox.bytes.length),
       Ints.toByteArray(cme.methodName.getBytes.length),
       Ints.toByteArray(cme.methodParams.noSpaces.getBytes.length),
-      cme.state.foldLeft(Array[Byte]())((a,b) => a ++ Ints.toByteArray(b.bytes.length) ++ b.bytes),
-      cme.code.foldLeft(Array[Byte]())((a,b) => a ++ Ints.toByteArray(b.bytes.length) ++ b.bytes),
       cme.executionBox.bytes,
       cme.methodName.getBytes,
       cme.methodParams.noSpaces.getBytes,
@@ -48,28 +44,12 @@ object ProgramMethodExecutionCompanion extends Serializer[ProgramMethodExecution
 
     var numReadBytes = Ints.BYTES + typeLength
 
-    val Array(stateLength: Int, codeLength: Int, executionBoxLength: Int, methodNameLength: Int, parametersLength: Int) =
-      (0 until 5).map { i =>
+    val Array(executionBoxLength: Int, methodNameLength: Int, parametersLength: Int) =
+      (0 until 3).map { i =>
         Ints.fromByteArray(bytes.slice(numReadBytes + i * Ints.BYTES, numReadBytes + (i + 1) * Ints.BYTES))
       }.toArray
 
-    numReadBytes += 5 * Ints.BYTES
-
-    val state: Seq[StateBox] = (0 until stateLength).map { _ =>
-      val stateBoxLength = Ints.fromByteArray(bytes.slice(numReadBytes, numReadBytes + Ints.BYTES))
-      numReadBytes += Ints.BYTES
-      val stateBox = StateBoxSerializer.parseBytes(bytes.slice(numReadBytes, numReadBytes + stateBoxLength)).get
-      numReadBytes += stateBoxLength
-      stateBox
-    }
-
-    val code: Seq[CodeBox] = (0 until codeLength).map { _ =>
-      val codeBoxLength = Ints.fromByteArray(bytes.slice(numReadBytes, numReadBytes + Ints.BYTES))
-      numReadBytes += Ints.BYTES
-      val codeBox = CodeBoxSerializer.parseBytes(bytes.slice(numReadBytes, numReadBytes + codeBoxLength)).get
-      numReadBytes += codeBoxLength
-      codeBox
-    }
+    numReadBytes += 3 * Ints.BYTES
 
     val executionBox = ExecutionBoxSerializer.parseBytes(bytes.slice(numReadBytes,
       numReadBytes + executionBoxLength))
@@ -104,7 +84,7 @@ object ProgramMethodExecutionCompanion extends Serializer[ProgramMethodExecution
     timestamp: Long) = ProgramTransactionCompanion.commonParseBytes(bytes.slice(numReadBytes,
       bytes.length))
 
-    bifrostTransaction.ProgramMethodExecution(state, code, executionBox, methodName,
+    bifrostTransaction.ProgramMethodExecution(executionBox, methodName,
       methodParams, owner, signatures, feePreBoxes, fees, timestamp, data)
   }
 
