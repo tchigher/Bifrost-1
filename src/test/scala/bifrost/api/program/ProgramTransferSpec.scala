@@ -3,6 +3,7 @@ package bifrost.api.program
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.util.ByteString
+import bifrost.ProgramMockState
 import bifrost.api.http.ProgramApiRoute
 import bifrost.transaction.box.BifrostBox
 import io.circe.parser.parse

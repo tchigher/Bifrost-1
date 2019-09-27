@@ -1,30 +1,29 @@
-package bifrost.api.program
+package bifrost
 
 import java.util.UUID
 
-import akka.actor.{ActorRef, ActorSystem, Props}
-import akka.http.scaladsl.model.{HttpEntity, HttpMethods, HttpRequest, MediaTypes}
-import akka.http.scaladsl.model.headers.RawHeader
 import akka.pattern.ask
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.{HttpEntity, HttpMethods, HttpRequest, MediaTypes}
 import akka.util.{ByteString, Timeout}
-import bifrost.{BifrostGenerators, BifrostLocalInterface, BifrostNodeViewHolder}
 import bifrost.forging.Forger
 import bifrost.history.{BifrostHistory, BifrostSyncInfoMessageSpec}
 import bifrost.mempool.BifrostMemPool
-import bifrost.network.{BifrostNodeViewSynchronizer, NetworkController, UPnP}
-import bifrost.network.message.{GetPeersSpec, InvSpec, MessageHandler, MessageSpec, ModifiersSpec, PeersSpec, RequestModifierSpec}
+import bifrost.network.message._
 import bifrost.network.peer.PeerManager
+import bifrost.network.{BifrostNodeViewSynchronizer, NetworkController, UPnP}
 import bifrost.scorexMod.GenericNodeViewHolder.{CurrentView, GetCurrentView}
 import bifrost.state.{BifrostState, BifrostStateChanges}
-import bifrost.transaction.box.{BifrostBox, CodeBox, ExecutionBox, PolyBox, StateBox}
 import bifrost.transaction.box.proposition.PublicKey25519Proposition
+import bifrost.transaction.box._
 import bifrost.wallet.BWallet
 import com.google.common.primitives.Ints
-import scorex.crypto.encode.Base58
 import io.circe.syntax._
+import scorex.crypto.encode.Base58
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.concurrent.Await
 import scala.reflect.io.Path
 import scala.util.Try
 
