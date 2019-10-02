@@ -20,9 +20,7 @@ class ProgramCallSpec extends WordSpec
 
   "programCall" should {
 
-    val boxState: Set[BifrostBox] = Set(stateBox, codeBox, executionBox)
-
-    manuallyApplyBoxes(boxState, 1)
+    manuallyApplyBoxes(programSet, 1)
 
     view().history.bestBlock.txs.foreach{tx =>
       println(s"${tx.toString}")

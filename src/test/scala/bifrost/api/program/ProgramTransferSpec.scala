@@ -19,9 +19,7 @@ class ProgramTransferSpec extends WordSpec
 
   "ProgramTransfer" should {
 
-    val boxState: Set[BifrostBox] = Set(stateBox, codeBox, executionBox)
-
-    manuallyApplyBoxes(boxState, 1)
+    manuallyApplyBoxes(programSet, 1)
 
     "Transfer a program and create a new ExecutionBox with the updated owner" in {
 

@@ -20,9 +20,7 @@ class ProgramMethodExecutionSpec extends WordSpec
 
   "executeProgramMethod" should {
 
-    val boxState: Set[BifrostBox] = Set(stateBox, codeBox, executionBox)
-
-    manuallyApplyBoxes(boxState, 1)
+    manuallyApplyBoxes(programSet, 1)
 
     "Update mutable state in a Program and return the updated state" in {
 
