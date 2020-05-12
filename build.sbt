@@ -180,4 +180,4 @@ lazy val benchmarking = Project(id = "benchmark", base = file("benchmark"))
 
 lazy val dbtools = Project(id = "dbtools", base = file("dbtools"))
   .settings(commonSettings: _*)
-  .dependsOn(bifrost)
+  .dependsOn(bifrost % "compile->compile;test->test")
