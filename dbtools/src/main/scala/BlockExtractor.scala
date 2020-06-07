@@ -9,13 +9,18 @@ import bifrost.nodeView.NodeViewModifier
 import bifrost.utils.Logging
 import com.google.common.primitives.Longs
 import io.circe
+import io.circe.syntax._
 import io.iohk.iodb.ByteArrayWrapper
 import scopt.OParser
+import scorex.crypto.encode.Base58
 
 import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Success, Try}
 
 object BlockExtractor extends Logging {
+
+  //TODO add raw bytes field to error block json
+  //TODO include block height in block json
 
   case class ExtractorConfig(config: String = "testnet-private.json",
                              output: File = new File("chain.json"),
@@ -41,7 +46,9 @@ object BlockExtractor extends Logging {
     history.storage.modifierById(blockId) match {
       case Some(block) =>
         val blockJson = block.json
-        val bytes = block.json.toString.getBytes
+        val bytes = block.json.deepMerge(Map(
+          "blockNumber"-> history.storage.heightOf(blockId).get.toString,
+          "blockDifficulty" -> history.storage.difficultyOf(blockId).get.toString).asJson).toString.getBytes ++ ",\n".getBytes
         outStream.write(bytes)
         (bytes.length, 0, block.parentId)
       case None =>
@@ -68,24 +75,30 @@ object BlockExtractor extends Logging {
 
         val regeneratedBlock = Block(parentId, timestamp, generatorBox, signature, Seq(), protocolVersion = version)
         log.info(s"${regeneratedBlock}")
-        val bytes = regeneratedBlock.json.toString.getBytes
+        val bytes = regeneratedBlock.json.toString.getBytes ++ ",\n".getBytes
+        val rawBytes = regeneratedBlock.json.deepMerge(Map(
+          "blockNumber" -> history.storage.heightOf(blockId).get.toString,
+          "blockDifficulty" -> history.storage.difficultyOf(blockId).get.toString,
+          "rawBytes" -> Base58.encode(regeneratedBlock.bytes)).asJson).toString.getBytes ++ ",\n".getBytes
         outStream.write(bytes)
-        errStream.write(bytes)
-        (bytes.length, bytes.length, regeneratedBlock.parentId)
+        errStream.write(rawBytes)
+        (bytes.length, rawBytes.length, regeneratedBlock.parentId)
     }
   }
 
   private def extract(outputFile: File, errFile: File, settings: ForgingSettings): Unit = {
     Try(new FileOutputStream(outputFile), new FileOutputStream(errFile)) match {
       case Success((output, err)) =>
-        var readBytes = ListBuffer(0, 0)
+        val readBytes = ListBuffer(0, 0)
         val outStream = new BufferedOutputStream(output)
         val errStream = new BufferedOutputStream(err)
 
         val history = History.readOrGenerate(settings)
         var blockId = history.bestBlockId
+        val height = history.height
+        val start = System.nanoTime()
 
-        log.info(s"Blockchain height is ${history.height}")
+        log.info(s"Blockchain height is ${height}")
 
         while(!(blockId sameElements settings.GenesisParentId)) {
           val bytes: (Int, Int, Block.BlockId) = extractToJson(outStream, errStream, history, blockId)
@@ -96,43 +109,15 @@ object BlockExtractor extends Logging {
           blockId = bytes._3
         }
 
-        output.close()
+        val duration = (System.nanoTime() - start) / 1e9d
+
+        log.info(s"Extracted $height blocks in $duration seconds")
+
+        outStream.flush()
+        errStream.flush()
         outStream.close()
-        err.close()
         errStream.close()
     }
-  }
-
-  private def exporter(): Unit = {
-    val settings: ForgingSettings = new ForgingSettings {
-      override val settingsJSON: Map[String, circe.Json] = settingsFromFile("toplnet.json")
-    }
-    val history: History = History.readOrGenerate(settings)
-
-    val jsonDir = new File(s"${settings.dataDirOpt.get}/json")
-    jsonDir.mkdirs()
-    var tempFile = new File(s"$jsonDir/data0.json")
-    var pw = new PrintWriter(tempFile)
-    var block = history.bestBlock
-    var height = history.height
-
-
-    while (height >= 0) {
-      if (height % 100000 == 0 && height / 100000 != 0) {
-        pw.close()
-        tempFile = new File(s"$jsonDir/data${height / 100000}.json")
-        pw = new PrintWriter(tempFile)
-      }
-
-      pw.write(block.json.toString)
-
-      println(s"${block.json}")
-
-      block = history.modifierById(block.parentId).get
-      height -= 1
-    }
-
-    pw.close()
   }
 
   def main(args: Array[String]): Unit = {
