@@ -1,10 +1,13 @@
-import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream, PrintWriter}
+import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream}
+import java.text.SimpleDateFormat
+import java.util.{Date, TimeZone}
 
 import bifrost.crypto.Signature25519
-import bifrost.history.History
 import bifrost.forging.ForgingSettings
+import bifrost.history.History
 import bifrost.modifier.block.Block
 import bifrost.modifier.box.{ArbitBox, BoxSerializer}
+import bifrost.modifier.transaction.bifrostTransaction._
 import bifrost.nodeView.NodeViewModifier
 import bifrost.utils.Logging
 import com.google.common.primitives.Longs
@@ -15,16 +18,14 @@ import scopt.OParser
 import scorex.crypto.encode.Base58
 
 import scala.collection.mutable.ListBuffer
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success, Try}
 
 object BlockExtractor extends Logging {
 
-  //TODO add raw bytes field to error block json
-  //TODO include block height in block json
-
   case class ExtractorConfig(config: String = "testnet-private.json",
                              output: File = new File("chain.json"),
-                             errorLog: File = new File("error.json"))
+                             errorLog: File = new File("error.json"),
+                             txsLog: File = new File("txs.json"))
 
   private lazy val extractorParser = {
     val builder = OParser.builder[ExtractorConfig]
@@ -41,14 +42,52 @@ object BlockExtractor extends Logging {
     )
   }
 
+  private def formatDate(timestamp: Long) = {
+    val date = new Date(timestamp)
+    val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ") //2020-06-07T07:27:10.080Z
+    dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"))
+    dateFormat.format(date)
+  }
+
+  private def txsToJson(assetStream: OutputStream, transferStream: OutputStream, atStream: OutputStream, txs: Seq[Transaction]) = {
+    txs.foreach {
+      case mat: mAssetCreation =>
+        assetStream.write(mat.json.deepMerge(
+          Map("txType" -> "AssetCreation",
+          "timestamp" -> formatDate(mat.timestamp),
+          "issuer" -> Base58.encode(mat.hub.bytes)).asJson).toString.getBytes ++ ",\n".getBytes)
+      case p: mPolyTransfer =>
+      transferStream.write(p.json.deepMerge(
+        Map("txType" -> "PolyTransfer",
+        "timestamp" -> formatDate(p.timestamp)).asJson).toString.getBytes ++ ",\n".getBytes)
+      case ar: mArbitTransfer =>
+      transferStream.write(ar.json.deepMerge(
+        Map("txType" -> "ArbitTransfer",
+        "timestamp" -> formatDate(ar.timestamp)).asJson).toString.getBytes ++ ",\n".getBytes)
+      case at: mAssetTransfer =>
+      atStream.write(at.json.deepMerge(
+        Map("txType" -> "AssetTransfer",
+          "timestamp" -> formatDate(at.timestamp),
+          "issuer" -> Base58.encode(at.hub.bytes)).asJson).toString.getBytes ++ ",\n".getBytes)
+    }
+  }
+
   //noinspection ScalaStyle
-  private def extractToJson(outStream: OutputStream, errStream: OutputStream, history: History, blockId: NodeViewModifier.ModifierId): (Int, Int, Block.BlockId) = {
+  private def extractToJson(outStream: OutputStream, errStream: OutputStream, assetStream: OutputStream, transferStream: OutputStream, assetTransferStream: OutputStream, history: History, blockId: NodeViewModifier.ModifierId): (Int, Int, Block.BlockId) = {
     history.storage.modifierById(blockId) match {
       case Some(block) =>
         val blockJson = block.json
         val bytes = block.json.deepMerge(Map(
           "blockNumber"-> history.storage.heightOf(blockId).get.toString,
-          "blockDifficulty" -> history.storage.difficultyOf(blockId).get.toString).asJson).toString.getBytes ++ ",\n".getBytes
+          "blockDifficulty" -> history.storage.difficultyOf(blockId).get.toString,
+          "timestamp" -> formatDate(block.timestamp)).asJson).toString.getBytes ++ ",\n".getBytes
+        /*log.info(s"${
+          block.json.deepMerge(Map(
+            "blockNumber"-> history.storage.heightOf(blockId).get.toString,
+            "blockDifficulty" -> history.storage.difficultyOf(blockId).get.toString).asJson).toString
+        }")*/
+
+        txsToJson(assetStream, transferStream, assetTransferStream, block.txs)
         outStream.write(bytes)
         (bytes.length, 0, block.parentId)
       case None =>
@@ -86,12 +125,15 @@ object BlockExtractor extends Logging {
     }
   }
 
-  private def extract(outputFile: File, errFile: File, settings: ForgingSettings): Unit = {
-    Try(new FileOutputStream(outputFile), new FileOutputStream(errFile)) match {
-      case Success((output, err)) =>
+  private def extract(outputFile: File, errFile: File, txFile: File, settings: ForgingSettings): Unit = {
+    Try(new FileOutputStream(outputFile), new FileOutputStream(errFile), new FileOutputStream(txFile)) match {
+      case Success((output, err, txs)) =>
         val readBytes = ListBuffer(0, 0)
         val outStream = new BufferedOutputStream(output)
         val errStream = new BufferedOutputStream(err)
+        val assetStream = new BufferedOutputStream(new FileOutputStream(new File("assetCreations.json")))
+        val transferStream = new BufferedOutputStream(new FileOutputStream(new File("transfers.json")))
+        val assetTransferStream = new BufferedOutputStream(new FileOutputStream(new File("assetTransfers.json")))
 
         val history = History.readOrGenerate(settings)
         var blockId = history.bestBlockId
@@ -101,7 +143,7 @@ object BlockExtractor extends Logging {
         log.info(s"Blockchain height is ${height}")
 
         while(!(blockId sameElements settings.GenesisParentId)) {
-          val bytes: (Int, Int, Block.BlockId) = extractToJson(outStream, errStream, history, blockId)
+          val bytes: (Int, Int, Block.BlockId) = extractToJson(outStream, errStream, assetStream, transferStream, assetTransferStream, history, blockId)
 
           readBytes(0) += bytes._1
           readBytes(1) += bytes._2
@@ -115,8 +157,12 @@ object BlockExtractor extends Logging {
 
         outStream.flush()
         errStream.flush()
+        assetStream.flush()
+        transferStream.flush()
         outStream.close()
         errStream.close()
+        assetStream.close()
+        transferStream.close()
     }
   }
 
@@ -128,7 +174,7 @@ object BlockExtractor extends Logging {
           override val settingsJSON: Map[String, circe.Json] = settingsFromFile(config.config)
         }
 
-        extract(config.output, config.errorLog, settings)
+        extract(config.output, config.errorLog, config.txsLog, settings)
 
       case _ =>
     }

@@ -138,7 +138,7 @@ object BlockCompanion extends Serializer[Block] {
       i => Longs.fromByteArray(bytes.slice(Block.BlockIdLength + i * Longs.BYTES, Block.BlockIdLength + (i + 1) * Longs.BYTES))
     }.toArray
 
-    val version = bytes.slice(Block.BlockIdLength + 2*Longs.BYTES, Block.BlockIdLength + 2*Longs.BYTES + 1).head
+    val version = bytes.slice(Block.BlockIdLength + Longs.BYTES, Block.BlockIdLength + Longs.BYTES + 1).head
 
     var numBytesRead = Block.BlockIdLength + Longs.BYTES * 2 + 1
 
@@ -152,14 +152,12 @@ object BlockCompanion extends Serializer[Block] {
 
     require(numTxExpected >= 0)
 
-    def unfoldLeft[A,B](seed: B)(f: B => Option[(B, A)]): Seq[A] = {
-      @tailrec
-      def loop(seed: B)(ls: Seq[A]): Seq[A] = f(seed) match {
-        case Some((b, a)) => loop(b)(a +: ls)
-        case None => ls
+    def unfoldLeft[A,B](seed: B)(f: B => Option[(A, B)]): Seq[A] = {
+      f(seed) match {
+        case Some((a, b)) => a +: unfoldLeft(b)(f)
+        case None => Nil
       }
-      loop(seed)(Nil)
-    }.reverse
+    }
 
     val txBytes: Array[Byte] = bytes.slice(numBytesRead, bytes.length)
 
@@ -168,13 +166,11 @@ object BlockCompanion extends Serializer[Block] {
       case b =>
         val bytesToGrab = Ints.fromByteArray(b.take(Ints.BYTES))
 
-        require(bytesToGrab >= 0)
-
         if (b.length - Ints.BYTES < bytesToGrab) {
           None // we're done because we can't grab the number of bytes required
         } else {
           val thisTx: Array[Byte] = b.slice(Ints.BYTES, Ints.BYTES + bytesToGrab)
-          Some((b.slice(Ints.BYTES + bytesToGrab, b.length), thisTx))
+          Some((thisTx, b.slice(Ints.BYTES + bytesToGrab, b.length)))
         }
     }.ensuring(_.length == numTxExpected)
 

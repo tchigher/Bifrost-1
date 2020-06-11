@@ -1,24 +1,19 @@
 package bifrost.modifier.transaction.serialization
 
-import bifrost.modifier.transaction.bifrostTransaction._
+import bifrost.modifier.transaction.bifrostTransaction.{AssetCreation, AssetRedemption, ProgramTransaction, ProgramTransfer, Transaction, TransferTransaction}
 import bifrost.serialization.Serializer
 import com.google.common.primitives.Ints
 
 import scala.util.Try
 
-object TransactionCompanion extends Serializer[Transaction] {
+object mTransactionCompanion extends Serializer[Transaction] {
 
   override def toBytes(m: Transaction): Array[Byte] = m match {
     case c: ProgramTransaction => ProgramTransactionCompanion.toBytes(c)
     case prT: ProgramTransfer => ProgramTransferCompanion.toBytes(prT)
     case p: TransferTransaction => TransferTransactionCompanion.toBytes(p)
-    case mpt: mPolyTransfer => mPolyTransferCompanion.toChildBytes(mpt)
-    case mat: mArbitTransfer => mArbitTransferCompanion.toChildBytes(mat)
-    case mast: mAssetTransfer => mAssetTransferCompanion.toChildBytes(mast)
     case ar: AssetRedemption => AssetRedemptionCompanion.toBytes(ar)
-    case mac: mAssetCreation => mAssetCreationCompanion.toBytes(mac)
-    case ac: AssetCreation => AssetCreationCompanion.toBytes(ac)
-    case cb: CoinbaseTransaction => CoinbaseTransactionCompanion.toBytes(cb)
+    case ac: AssetCreation => AssetCreationCompanion.toBytes(ac) //AssetCreationCompanion.toBytes(ac)
   }
 
   override def parseBytes(bytes: Array[Byte]): Try[Transaction] = Try {
@@ -30,9 +25,9 @@ object TransactionCompanion extends Serializer[Transaction] {
       case "ProgramTransfer" => ProgramTransferCompanion.parseBytes(bytes).get
       case "TransferTransaction" => TransferTransactionCompanion.parseBytes(bytes).get
       case "AssetRedemption" => AssetRedemptionCompanion.parseBytes(bytes).get
-      case "AssetCreation" => mAssetCreationCompanion.parseBytes(bytes).get //AssetCreationCompanion.parseBytes(bytes).get
+      case "AssetCreation" => AssetCreationCompanion.parseBytes(bytes).get
       case "CoinbaseTransaction" => CoinbaseTransactionCompanion.parseBytes(bytes).get
     }
   }
-
 }
+
