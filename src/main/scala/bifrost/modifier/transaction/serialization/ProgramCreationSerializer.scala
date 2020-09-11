@@ -11,6 +11,9 @@ import bifrost.program.{ExecutionBuilder, ExecutionBuilderSerializer}
 import bifrost.utils.Extensions._
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 
+import scala.util.Try
+import com.google.common.primitives.{Ints, Longs}
+
 //noinspection ScalaStyle
 object ProgramCreationSerializer extends BifrostSerializer[ProgramCreation] {
 
@@ -91,5 +94,70 @@ object ProgramCreationSerializer extends BifrostSerializer[ProgramCreation] {
 
     ProgramCreation(executionBuilder, readOnlyStateBoxes, preInvestmentBoxes,
                     owner, signatures, preFeeBoxes, fees, timestamp, data)
+  }
+
+  //TODO: Jing - remove
+  def decode(bytes: Array[Byte]): Try[ProgramCreation] = Try {
+
+    val typeLength = Ints.fromByteArray(bytes.take(Ints.BYTES))
+    val typeStr = new String(bytes.slice(Ints.BYTES, Ints.BYTES + typeLength))
+
+    require(typeStr == "ProgramCreation")
+
+    var numReadBytes = Ints.BYTES + typeLength
+    val bytesWithoutType = bytes.slice(numReadBytes, bytes.length)
+
+    val numPreInvestmentBoxes: Int = Ints.fromByteArray(bytesWithoutType.slice(0, Ints.BYTES))
+
+    numReadBytes = Ints.BYTES
+
+    val preInvestmentBoxes: IndexedSeq[(Nonce, Long)] = (0 until numPreInvestmentBoxes).map { i =>
+      val nonce = Longs.fromByteArray(bytesWithoutType.slice(numReadBytes + 2 * i * Longs.BYTES,
+        numReadBytes + (2 * i + 1) * Longs.BYTES))
+      val value = Longs.fromByteArray(bytesWithoutType.slice(numReadBytes + (2 * i + 1) * Longs.BYTES,
+        numReadBytes + 2 * (i + 1) * Longs.BYTES))
+      nonce -> value
+    }
+
+    numReadBytes += 2 * numPreInvestmentBoxes * Longs.BYTES
+
+    val executionBuilderLength: Long = Longs.fromByteArray(bytesWithoutType.slice(numReadBytes, numReadBytes + Longs.BYTES))
+
+    numReadBytes += Longs.BYTES
+
+    val executionBuilder = ExecutionBuilderSerializer.decode(bytesWithoutType.slice(numReadBytes,
+      numReadBytes + executionBuilderLength.toInt)).get
+
+    numReadBytes += executionBuilderLength.toInt
+
+    val readOnlyStateBoxesLength = Ints.fromByteArray(bytesWithoutType.slice(numReadBytes, numReadBytes + Ints.BYTES))
+
+    numReadBytes += Ints.BYTES
+
+    var readOnlyStateBoxes = Seq[UUID]()
+    for (_ <- 1 to readOnlyStateBoxesLength) {
+      val uuid = new UUID(Longs.fromByteArray(bytesWithoutType.slice(numReadBytes, numReadBytes + Longs.BYTES)),
+        Longs.fromByteArray(bytesWithoutType.slice(numReadBytes + Longs.BYTES, numReadBytes + 2 * Longs.BYTES)))
+      numReadBytes += 2 * Longs.BYTES
+      readOnlyStateBoxes = readOnlyStateBoxes :+ uuid
+    }
+
+    val dataLen: Int = Ints.fromByteArray(bytesWithoutType.slice(numReadBytes, numReadBytes + Ints.BYTES))
+
+    numReadBytes += Ints.BYTES
+
+    val data: String = new String(
+      bytesWithoutType.slice(numReadBytes, numReadBytes + dataLen))
+
+    numReadBytes += dataLen
+
+    val (owner: PublicKey25519Proposition,
+    signatures: Map[PublicKey25519Proposition, Signature25519],
+    feePreBoxes: Map[PublicKey25519Proposition, IndexedSeq[(Nonce, Long)]],
+    fees: Map[PublicKey25519Proposition, Long],
+    timestamp: Long) = ProgramTransactionSerializer.commonDecode(bytesWithoutType.slice(numReadBytes,
+      bytesWithoutType.length))
+
+    ProgramCreation(executionBuilder, readOnlyStateBoxes, preInvestmentBoxes, owner, signatures, feePreBoxes, fees, timestamp, data)
   }
 }

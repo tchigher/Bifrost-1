@@ -3,6 +3,9 @@ package bifrost.modifier.transaction.serialization
 import bifrost.modifier.transaction.bifrostTransaction._
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 
+import scala.util.Try
+import com.google.common.primitives.Ints
+
 object TransactionSerializer extends BifrostSerializer[Transaction] {
 
   override def serialize(obj: Transaction, w: Writer): Unit = {
@@ -50,6 +53,20 @@ object TransactionSerializer extends BifrostSerializer[Transaction] {
 
       case "AssetCreation" => AssetCreationSerializer.parse(r)
       case "CoinbaseTransaction" => CoinbaseTransactionSerializer.parse(r)
+    }
+  }
+
+  //TODO: Jing - remove
+  def decode(bytes: Array[Byte]): Try[Transaction] = Try {
+    val typeLength = Ints.fromByteArray(bytes.slice(0, Ints.BYTES))
+    val typeStr = new String(bytes.slice(Ints.BYTES, Ints.BYTES + typeLength))
+
+    typeStr match {
+      case "ProgramTransaction" => ProgramTransactionSerializer.decode(bytes).get
+      case "ProgramTransfer" => ProgramTransferSerializer.decode(bytes).get
+      case "TransferTransaction" => TransferTransactionSerializer.decode(bytes).get
+      case "AssetCreation" => AssetCreationSerializer.decode(bytes).get
+      case "CoinbaseTransaction" => CoinbaseTransactionSerializer.decode(bytes).get
     }
   }
 }

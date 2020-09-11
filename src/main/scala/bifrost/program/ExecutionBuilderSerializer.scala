@@ -3,6 +3,9 @@ package bifrost.program
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 import io.circe.parser
 
+import scala.util.Try
+import com.google.common.primitives.{Ints, Longs}
+
 object ExecutionBuilderSerializer extends BifrostSerializer[ExecutionBuilder] {
 
   override def serialize(obj: ExecutionBuilder, w: Writer): Unit = {
@@ -24,6 +27,48 @@ object ExecutionBuilderSerializer extends BifrostSerializer[ExecutionBuilder] {
     val assetCode: String = r.getIntString()
 
     val core: ProgramPreprocessor = parser.parse(r.getIntString()) match {
+      case Left(_) => throw new Exception("BaseModule json not properly formatted")
+      case Right(x) => x.as[ProgramPreprocessor] match {
+        case Left(_) => throw new Exception("Internal json was malformed in BaseModule")
+        case Right(b: ProgramPreprocessor) => b
+      }
+    }
+
+    ExecutionBuilder(terms, assetCode, core)
+  }
+
+  //TODO: Jing - remove
+  def decode(bytes: Array[Byte]): Try[ExecutionBuilder] = Try {
+
+    val Array(termsLength: Long, coreLength: Long) = (0 until 2).map { i =>
+      Longs.fromByteArray(bytes.slice(i * Longs.BYTES, (i + 1) * Longs.BYTES))
+    }.toArray
+
+    var numBytesRead = 2 * Longs.BYTES
+
+    val numStrBytes = Ints.fromByteArray(bytes.slice(numBytesRead, numBytesRead + Ints.BYTES))
+
+    numBytesRead += Ints.BYTES
+
+    val assetCode: String = new String(bytes.slice(numBytesRead, numBytesRead + numStrBytes))
+
+    numBytesRead += numStrBytes
+
+    val terms: ExecutionBuilderTerms = parser.parse(new String(
+      bytes.slice(numBytesRead, numBytesRead + termsLength.toInt)
+    )) match {
+      case Left(_) => throw new Exception("ExecutionBuilderTerm json not properly formatted")
+      case Right(x) => x.as[ExecutionBuilderTerms] match {
+        case Left(_) => throw new Exception("ExecutionBuilder terms json was malformed")
+        case Right(a: ExecutionBuilderTerms) => a
+      }
+    }
+
+    numBytesRead += termsLength.toInt
+
+    val core: ProgramPreprocessor = parser.parse(new String(
+      bytes.slice(numBytesRead, numBytesRead + coreLength.toInt)
+    )) match {
       case Left(_) => throw new Exception("BaseModule json not properly formatted")
       case Right(x) => x.as[ProgramPreprocessor] match {
         case Left(_) => throw new Exception("Internal json was malformed in BaseModule")

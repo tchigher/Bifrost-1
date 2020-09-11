@@ -6,6 +6,10 @@ import bifrost.modifier.box.{ExecutionBox, ProgramBox}
 import bifrost.utils.Extensions._
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 
+import scala.util.Try
+import com.google.common.primitives.{Ints, Longs}
+import bifrost.modifier.box.proposition.{PublicKey25519Proposition, Constants25519}
+
 object ExecutionBoxSerializer extends BifrostSerializer[ExecutionBox] {
 
   override def serialize(obj: ExecutionBox, w: Writer): Unit = {
@@ -42,5 +46,48 @@ object ExecutionBoxSerializer extends BifrostSerializer[ExecutionBox] {
     }
 
     ExecutionBox(programBox.proposition, programBox.nonce, programBox.value, stateBoxUUIDs, codeBoxIds)
+  }
+
+  //TODO: Jing - remove
+  def decode(obj: Array[Byte]): Try[ExecutionBox] = Try {
+    var takenBytes = 0
+
+    val boxTypeLength = Ints.fromByteArray(obj.take(Ints.BYTES))
+    takenBytes += Ints.BYTES
+
+    val boxType = new String(obj.slice(takenBytes, takenBytes + boxTypeLength))
+    takenBytes += boxTypeLength
+
+    val prop = PublicKey25519Proposition(obj.slice(takenBytes, takenBytes + Constants25519.PubKeyLength))
+    takenBytes += Constants25519.PubKeyLength
+
+    val nonce = Longs.fromByteArray(obj.slice(takenBytes, takenBytes + Longs.BYTES))
+    takenBytes += Longs.BYTES
+
+    val uuid = new UUID(Longs.fromByteArray(obj.slice(takenBytes, takenBytes + Longs.BYTES)),
+      Longs.fromByteArray(obj.slice(takenBytes + Longs.BYTES, takenBytes + 2 * Longs.BYTES)))
+    takenBytes += Longs.BYTES * 2
+
+    val stateBoxUUIDsLength = Ints.fromByteArray(obj.slice(takenBytes, takenBytes + Ints.BYTES))
+    takenBytes += Ints.BYTES
+
+    var stateBoxUUIDs = Seq[UUID]()
+    for (_ <- 1 to stateBoxUUIDsLength) {
+      val uuid = new UUID(Longs.fromByteArray(obj.slice(takenBytes, takenBytes + Longs.BYTES)),
+        Longs.fromByteArray(obj.slice(takenBytes + Longs.BYTES, takenBytes + Longs.BYTES * 2)))
+      takenBytes += Longs.BYTES * 2
+      stateBoxUUIDs = stateBoxUUIDs :+ uuid
+    }
+
+    val codeBoxIdsLength = Ints.fromByteArray(obj.slice(takenBytes, takenBytes + Ints.BYTES))
+    takenBytes += Ints.BYTES
+
+    val codeBoxIds: Seq[Array[Byte]] = (0 until codeBoxIdsLength).map { i =>
+      val id: Array[Byte] = obj.slice(takenBytes + i * (4 * Longs.BYTES), takenBytes + (i + 1) * (4 * Longs.BYTES))
+      id
+    }
+    takenBytes += Longs.BYTES * 4 * codeBoxIdsLength
+
+    ExecutionBox(prop, nonce, uuid, stateBoxUUIDs, codeBoxIds)
   }
 }

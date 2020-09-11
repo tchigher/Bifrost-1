@@ -10,6 +10,11 @@ import bifrost.modifier.transaction.serialization.TransactionSerializer
 import bifrost.utils.Extensions._
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 
+import bifrost.utils.bytesToId
+import com.google.common.primitives.{Ints, Longs}
+import scala.util.Try
+import scala.annotation.tailrec
+
 object BlockSerializer extends BifrostSerializer[Block] {
 
   override def serialize(block: Block, w: Writer): Unit = {
@@ -56,5 +61,117 @@ object BlockSerializer extends BifrostSerializer[Block] {
     val txs: Seq[Transaction] = (0 until txsLength).map(_ => TransactionSerializer.parse(r))
 
     Block(parentId, timestamp, generatorBox, signature, txs, version)
+  }
+
+
+  // TODO: Jing - remove
+  def decode(bytes: Array[Byte]): Try[Block] = Try {
+
+    val parentId = bytesToId(bytes.slice(0, Block.blockIdLength))
+
+    val Array(timestamp: Long, generatorBoxLen: Long) = (0 until 2).map {
+      i => Longs.fromByteArray(bytes.slice(Block.blockIdLength + i*Longs.BYTES, Block.blockIdLength + (i + 1)*Longs.BYTES))
+    }.toArray
+
+    val version = bytes.slice(Block.blockIdLength + 2*Longs.BYTES, Block.blockIdLength + 2*Longs.BYTES + 1).head
+
+    var numBytesRead = Block.blockIdLength + Longs.BYTES*2 + 1
+
+    val generatorBox = BoxSerializer.decode(bytes.slice(numBytesRead, numBytesRead + generatorBoxLen.toInt)).get.asInstanceOf[ArbitBox]
+
+    val inflation = bytes.slice(numBytesRead + generatorBoxLen.toInt, numBytesRead + generatorBoxLen.toInt + Longs.BYTES)
+
+    val signature = Signature25519(bytes.slice(numBytesRead + generatorBoxLen.toInt + Longs.BYTES,
+      numBytesRead + generatorBoxLen.toInt + Longs.BYTES + Signature25519.SignatureSize))
+
+    numBytesRead += generatorBoxLen.toInt + Longs.BYTES + Signature25519.SignatureSize
+
+    val numTxExpected = Ints.fromByteArray(bytes.slice(numBytesRead, numBytesRead + Ints.BYTES))
+    numBytesRead += Ints.BYTES
+
+    require(numTxExpected >= 0)
+
+    def unfoldLeft[A,B](seed: B)(f: B => Option[(B, A)]): Seq[A] = {
+      @tailrec
+      def loop(seed: B)(ls: Seq[A]): Seq[A] = f(seed) match {
+        case Some((b, a)) => loop(b)(a +: ls)
+        case None => ls
+      }
+      loop(seed)(Nil)
+    }.reverse
+
+    val txBytes: Array[Byte] = bytes.slice(numBytesRead, bytes.length)
+
+    val txByteSeq: Seq[Array[Byte]] = unfoldLeft(txBytes) {
+      case b if b.length < Ints.BYTES => None
+      case b =>
+        val bytesToGrab = Ints.fromByteArray(b.take(Ints.BYTES))
+
+        require(bytesToGrab >= 0)
+
+        if (b.length - Ints.BYTES < bytesToGrab) {
+          None // we're done because we can't grab the number of bytes required
+        } else {
+          val thisTx: Array[Byte] = b.slice(Ints.BYTES, Ints.BYTES + bytesToGrab)
+          Some((b.slice(Ints.BYTES + bytesToGrab, b.length), thisTx))
+        }
+    }.ensuring(_.length == numTxExpected)
+
+    val tx: Seq[Transaction] = txByteSeq.map(tx => TransactionSerializer.decode(tx).get)
+
+    Block(parentId, timestamp, generatorBox, signature, tx, version)
+  }
+
+
+  def decode2xAndBefore(bytes: Array[Byte]): Try[Block] = Try {
+    val parentId = bytesToId(bytes.slice(0, Block.blockIdLength))
+
+    val Array(timestamp: Long, generatorBoxLen: Long) = (0 until 2).map {
+      i => Longs.fromByteArray(bytes.slice(Block.blockIdLength + i * Longs.BYTES, Block.blockIdLength + (i + 1) * Longs.BYTES))
+    }.toArray
+
+    val version = bytes.slice(Block.blockIdLength + 2*Longs.BYTES, Block.blockIdLength + 2*Longs.BYTES + 1).head
+
+    var numBytesRead = Block.blockIdLength + Longs.BYTES * 2 + 1
+
+    val generatorBox = BoxSerializer.decode(bytes.slice(numBytesRead, numBytesRead + generatorBoxLen.toInt)).get.asInstanceOf[ArbitBox]
+    val signature = Signature25519(bytes.slice(numBytesRead + generatorBoxLen.toInt, numBytesRead + generatorBoxLen.toInt + Signature25519.SignatureSize))
+
+    numBytesRead += generatorBoxLen.toInt + Signature25519.SignatureSize
+
+    val numTxExpected = Ints.fromByteArray(bytes.slice(numBytesRead, numBytesRead + Ints.BYTES))
+    numBytesRead += Ints.BYTES
+
+    require(numTxExpected >= 0)
+
+    def unfoldLeft[A,B](seed: B)(f: B => Option[(B, A)]): Seq[A] = {
+      @tailrec
+      def loop(seed: B)(ls: Seq[A]): Seq[A] = f(seed) match {
+        case Some((b, a)) => loop(b)(a +: ls)
+        case None => ls
+      }
+      loop(seed)(Nil)
+    }.reverse
+
+    val txBytes: Array[Byte] = bytes.slice(numBytesRead, bytes.length)
+
+    val txByteSeq: Seq[Array[Byte]] = unfoldLeft(txBytes) {
+      case b if b.length < Ints.BYTES => None
+      case b =>
+        val bytesToGrab = Ints.fromByteArray(b.take(Ints.BYTES))
+
+        require(bytesToGrab >= 0)
+
+        if (b.length - Ints.BYTES < bytesToGrab) {
+          None // we're done because we can't grab the number of bytes required
+        } else {
+          val thisTx: Array[Byte] = b.slice(Ints.BYTES, Ints.BYTES + bytesToGrab)
+          Some((b.slice(Ints.BYTES + bytesToGrab, b.length), thisTx))
+        }
+    }.ensuring(_.length == numTxExpected)
+
+    val tx: Seq[Transaction] = txByteSeq.map(tx => TransactionSerializer.decode(tx).get)
+
+    Block(parentId, timestamp, generatorBox, signature, tx, version)
   }
 }

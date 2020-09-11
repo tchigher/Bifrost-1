@@ -11,6 +11,9 @@ import bifrost.utils.Extensions._
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 import io.circe.{Json, parser}
 
+import scala.util.Try
+import com.google.common.primitives.Ints
+
 object ProgramMethodExecutionSerializer extends BifrostSerializer[ProgramMethodExecution] {
 
   override def serialize(obj: ProgramMethodExecution, w: Writer): Unit = {
@@ -91,5 +94,74 @@ object ProgramMethodExecutionSerializer extends BifrostSerializer[ProgramMethodE
 
     ProgramMethodExecution(state, code, executionBox, methodName, methodParams,
                            owner, signatures, preFeeBoxes, fees, timestamp, data)
+  }
+
+  //TODO: Jing - remove
+  def decode(bytes: Array[Byte]): Try[ProgramMethodExecution] = Try {
+    val typeLength = Ints.fromByteArray(bytes.take(Ints.BYTES))
+    val typeStr = new String(bytes.slice(Ints.BYTES, Ints.BYTES + typeLength))
+
+    require(typeStr == "ProgramMethodExecution")
+
+    var numReadBytes = Ints.BYTES + typeLength
+
+    val Array(stateLength: Int, codeLength: Int, executionBoxLength: Int, methodNameLength: Int, parametersLength: Int) =
+      (0 until 5).map { i =>
+        Ints.fromByteArray(bytes.slice(numReadBytes + i * Ints.BYTES, numReadBytes + (i + 1) * Ints.BYTES))
+      }.toArray
+
+    numReadBytes += 5 * Ints.BYTES
+
+    val state: Seq[StateBox] = (0 until stateLength).map { _ =>
+      val stateBoxLength = Ints.fromByteArray(bytes.slice(numReadBytes, numReadBytes + Ints.BYTES))
+      numReadBytes += Ints.BYTES
+      val stateBox = StateBoxSerializer.decode(bytes.slice(numReadBytes, numReadBytes + stateBoxLength)).get
+      numReadBytes += stateBoxLength
+      stateBox
+    }
+
+    val code: Seq[CodeBox] = (0 until codeLength).map { _ =>
+      val codeBoxLength = Ints.fromByteArray(bytes.slice(numReadBytes, numReadBytes + Ints.BYTES))
+      numReadBytes += Ints.BYTES
+      val codeBox = CodeBoxSerializer.decode(bytes.slice(numReadBytes, numReadBytes + codeBoxLength)).get
+      numReadBytes += codeBoxLength
+      codeBox
+    }
+
+    val executionBox = ExecutionBoxSerializer.decode(bytes.slice(numReadBytes,
+      numReadBytes + executionBoxLength))
+      .get
+
+    numReadBytes += executionBoxLength
+
+    val methodName = new String(bytes.slice(numReadBytes, numReadBytes + methodNameLength))
+
+    numReadBytes += methodNameLength
+
+    val methodParams: Json = parser.parse(new String(bytes.slice(numReadBytes,
+      numReadBytes + parametersLength))) match {
+      case Left(f) => throw f
+      case Right(j: Json) => j
+    }
+
+    numReadBytes += parametersLength
+
+    val dataLen: Int = Ints.fromByteArray(bytes.slice(numReadBytes, numReadBytes + Ints.BYTES))
+
+    numReadBytes += Ints.BYTES
+
+    val data: String = new String(bytes.slice(numReadBytes, numReadBytes + dataLen))
+
+    numReadBytes += dataLen
+
+    val (owner: PublicKey25519Proposition,
+    signatures: Map[PublicKey25519Proposition, Signature25519],
+    feePreBoxes: Map[PublicKey25519Proposition, IndexedSeq[(Nonce, Long)]],
+    fees: Map[PublicKey25519Proposition, Long],
+    timestamp: Long) = ProgramTransactionSerializer.commonDecode(bytes.slice(numReadBytes,
+      bytes.length))
+
+    ProgramMethodExecution(state, code, executionBox, methodName,
+      methodParams, owner, signatures, feePreBoxes, fees, timestamp, data)
   }
 }
