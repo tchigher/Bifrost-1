@@ -2,10 +2,11 @@ import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream, Prin
 
 import bifrost.crypto.Signature25519
 import bifrost.history.History
-import bifrost.forging.ForgingSettings
+import bifrost.modifier.ModifierId
 import bifrost.modifier.block.Block
-import bifrost.modifier.box.{ArbitBox, BoxSerializer}
-import bifrost.nodeView.NodeViewModifier
+import bifrost.modifier.box.serialization.BoxSerializer
+import bifrost.modifier.box.ArbitBox
+import bifrost.settings.{AppSettings, ForgingSettings, StartupOpts}
 import bifrost.utils.Logging
 import com.google.common.primitives.Longs
 import io.circe
@@ -42,7 +43,7 @@ object BlockExtractor extends Logging {
   }
 
   //noinspection ScalaStyle
-  private def extractToJson(outStream: OutputStream, errStream: OutputStream, history: History, blockId: NodeViewModifier.ModifierId): (Int, Int, Block.BlockId) = {
+  private def extractToJson(outStream: OutputStream, errStream: OutputStream, history: History, blockId: ModifierId): (Int, Int, Block.BlockId) = {
     history.storage.modifierById(blockId) match {
       case Some(block) =>
         val blockJson = block.json
@@ -52,18 +53,18 @@ object BlockExtractor extends Logging {
         outStream.write(bytes)
         (bytes.length, 0, block.parentId)
       case None =>
-        val blockBytes = history.storage.storage.get(ByteArrayWrapper(blockId)).get.data.tail
-        val parentId = blockBytes.slice(0, Block.BlockIdLength)
+        val blockBytes = history.storage.storage.get(ByteArrayWrapper(blockId.hashBytes)).get.data.tail
+        val parentId = ModifierId(blockBytes.slice(0, Block.blockIdLength))
         log.info(s"heightOf: ${history.storage.heightOf(blockId)}")
-        log.info(s"parentId: ${ByteArrayWrapper(parentId)}")
+        log.info(s"parentId: ${ByteArrayWrapper(parentId.hashBytes)}")
         val Array(timestamp: Long, generatorBoxLen: Long) = (0 until 2).map {
-          i => Longs.fromByteArray(blockBytes.slice(Block.BlockIdLength + i * Longs.BYTES, Block.BlockIdLength + (i + 1) * Longs.BYTES))
+          i => Longs.fromByteArray(blockBytes.slice(Block.blockIdLength + i * Longs.BYTES, Block.blockIdLength + (i + 1) * Longs.BYTES))
         }.toArray
         log.info(s"timestamp: $timestamp")
         log.info(s"generatorBoxLen: $generatorBoxLen")
-        val version = blockBytes.slice(Block.BlockIdLength + 2*Longs.BYTES, Block.BlockIdLength + 2*Longs.BYTES + 1).head
+        val version = blockBytes.slice(Block.blockIdLength + 2*Longs.BYTES, Block.blockIdLength + 2*Longs.BYTES + 1).head
         log.info(s"version: $version")
-        var numBytesRead = Block.BlockIdLength + Longs.BYTES * 2 + 1
+        var numBytesRead = Block.blockIdLength + Longs.BYTES * 2 + 1
         val generatorBox = BoxSerializer.parseBytes(blockBytes.slice(numBytesRead, numBytesRead + generatorBoxLen.toInt)).get.asInstanceOf[ArbitBox]
         numBytesRead += generatorBoxLen.toInt
         log.info(s"generatorBox: ${generatorBox.json}")
@@ -73,7 +74,7 @@ object BlockExtractor extends Logging {
         }
         val signature = Signature25519(blockBytes.slice(numBytesRead, numBytesRead + Signature25519.SignatureSize))
 
-        val regeneratedBlock = Block(parentId, timestamp, generatorBox, signature, Seq(), protocolVersion = version)
+        val regeneratedBlock = Block(parentId, timestamp, generatorBox, signature, Seq(), version)
         log.info(s"${regeneratedBlock}")
         val bytes = regeneratedBlock.json.toString.getBytes ++ ",\n".getBytes
         val rawBytes = regeneratedBlock.json.deepMerge(Map(
@@ -86,7 +87,7 @@ object BlockExtractor extends Logging {
     }
   }
 
-  private def extract(outputFile: File, errFile: File, settings: ForgingSettings): Unit = {
+  private def extract(outputFile: File, errFile: File, settings: AppSettings): Unit = {
     Try(new FileOutputStream(outputFile), new FileOutputStream(errFile)) match {
       case Success((output, err)) =>
         val readBytes = ListBuffer(0, 0)
@@ -100,7 +101,7 @@ object BlockExtractor extends Logging {
 
         log.info(s"Blockchain height is ${height}")
 
-        while(!(blockId sameElements settings.GenesisParentId)) {
+        while(!(blockId == History.GenesisParentId)) {
           val bytes: (Int, Int, Block.BlockId) = extractToJson(outStream, errStream, history, blockId)
 
           readBytes(0) += bytes._1
@@ -123,10 +124,7 @@ object BlockExtractor extends Logging {
   def main(args: Array[String]): Unit = {
     OParser.parse(extractorParser, args, ExtractorConfig()) match {
       case Some(config) =>
-
-        val settings = new ForgingSettings{
-          override val settingsJSON: Map[String, circe.Json] = settingsFromFile(config.config)
-        }
+        val settings: AppSettings = AppSettings.read(StartupOpts(Some(config.config), None))
 
         extract(config.output, config.errorLog, settings)
 
