@@ -1,6 +1,6 @@
 package bifrost.serialization
 
-import bifrost.crypto.{PrivateKey25519, PrivateKey25519Companion, Signature25519}
+import bifrost.crypto.{PrivateKey25519Companion, Signature25519}
 import bifrost.history.History
 import bifrost.modifier.ModifierId
 import bifrost.modifier.block.{Block, BlockSerializer}
@@ -9,10 +9,8 @@ import bifrost.modifier.box.proposition.{MofNProposition, MofNPropositionSeriali
 import bifrost.modifier.box.serialization.BoxSerializer
 import bifrost.modifier.transaction.bifrostTransaction._
 import bifrost.modifier.transaction.serialization._
-import bifrost.nodeView.NodeViewHolder.log
 import bifrost.program.{ExecutionBuilder, ExecutionBuilderSerializer}
 import bifrost.{BifrostGenerators, ValidGenerators}
-import io.iohk.iodb.ByteArrayWrapper
 import serializer.BloomTopics
 
 import scala.collection.BitSet
@@ -32,7 +30,8 @@ class SerializationTests extends AnyPropSpec
   with BifrostGenerators
   with ValidGenerators {
 
-  property("Serialize a block two times and see if they are the same") {
+  property("Serialize two genesis blocks and check if they are the same") {
+    val GenesisAccountsNum = 50
     val GenesisBalance = 100000000L
 
     //propositions with wallet seed genesisoo, genesiso1, ..., genesis48, genesis49
@@ -71,33 +70,39 @@ class SerializationTests extends AnyPropSpec
     val secGenesisAccount = PrivateKey25519Companion.generateKeys("genesis".getBytes)
     val secGenesisAccountPriv = secGenesisAccount._1
 
-    val fstGenesisTxs = Seq(ArbitTransfer(
-      IndexedSeq(fstGenesisAccountPriv -> 0),
-      icoMembers.map(_ -> GenesisBalance),
-      0L,
-      0L,
-      "")) ++ Seq(PolyTransfer(
-      IndexedSeq(fstGenesisAccountPriv -> 0),
-      icoMembers.map(_ -> GenesisBalance),
-      0L,
-      0L,
-      ""))
-    log.debug(s"Initialize state with transaction ${fstGenesisTxs.head} with boxes ${fstGenesisTxs.head.newBoxes}")
+    val fstArbTx = ArbitTransfer(IndexedSeq(fstGenesisAccountPriv.publicImage -> 0L),
+                              icoMembers.map(_ -> GenesisBalance),
+                              Map(fstGenesisAccountPriv.publicImage -> Signature25519(Array.fill(Signature25519.SignatureSize)(1: Byte))),
+                              0L,
+                              0L,
+                              "")
+    val fstPolyTx = PolyTransfer(IndexedSeq(fstGenesisAccountPriv.publicImage -> 0L),
+                              icoMembers.map(_ -> GenesisBalance),
+                              Map(fstGenesisAccountPriv.publicImage -> Signature25519(Array.fill(Signature25519.SignatureSize)(1: Byte))),
+                              0L,
+                              0L,
+                              "")
+    val fstGenesisTxs = Seq(fstArbTx, fstPolyTx)
 
-    val secGenesisTxs = Seq(ArbitTransfer(
-      IndexedSeq(secGenesisAccountPriv -> 0),
+    log.debug(s"Initialize state with transaction ${fstGenesisTxs.head} with boxes ${fstGenesisTxs.head.newBoxes}")
+    assert(icoMembers.length == GenesisAccountsNum)
+
+    val secArbTx = ArbitTransfer(IndexedSeq(secGenesisAccountPriv.publicImage -> 0L),
       icoMembers.map(_ -> GenesisBalance),
+      Map(secGenesisAccountPriv.publicImage -> Signature25519(Array.fill(Signature25519.SignatureSize)(1: Byte))),
       0L,
       0L,
-      "")) ++ Seq(PolyTransfer(
-      IndexedSeq(secGenesisAccountPriv -> 0),
+      "")
+    val secPolyTx = PolyTransfer(IndexedSeq(secGenesisAccountPriv.publicImage -> 0L),
       icoMembers.map(_ -> GenesisBalance),
+      Map(secGenesisAccountPriv.publicImage -> Signature25519(Array.fill(Signature25519.SignatureSize)(1: Byte))),
       0L,
       0L,
-      ""))
-    log.debug(s"Initialize state with transaction ${secGenesisTxs.head} with boxes ${secGenesisTxs.head.newBoxes}")
-    //YT - commented out below assertion since transaction id generation was changed
-    //assert(Base58.encode(genesisTxs.head.id) == "5dJRukdd7sw7cmc8vwSnwbVggWLPV4VHYsZt7AQcFW3B", Base58.encode(genesisTxs.head.id))
+      "")
+    val secGenesisTxs = Seq(secArbTx, secPolyTx)
+
+    log.debug(s"Initialize state with transaction ${fstGenesisTxs.head} with boxes ${fstGenesisTxs.head.newBoxes}")
+    assert(icoMembers.length == GenesisAccountsNum)
 
     val fstGenesisBox = ArbitBox(fstGenesisAccountPriv.publicImage, 0, GenesisBalance)
     val secGenesisBox = ArbitBox(secGenesisAccountPriv.publicImage, 0, GenesisBalance)
@@ -105,9 +110,7 @@ class SerializationTests extends AnyPropSpec
     val version = settings.forgingSettings.version
     val fstBlock = Block.create(ModifierId(History.GenesisParentId), 0L, fstGenesisTxs, fstGenesisBox, fstGenesisAccountPriv, version)
     val secBlock = Block.create(ModifierId(History.GenesisParentId), 0L, secGenesisTxs, secGenesisBox, secGenesisAccountPriv, version)
-    /* history = history.append(oneBlock).get._1 */
-    println(s"fstblock========${Base58.encode(fstBlock.bytes)}")
-    println(s"secblock========${Base58.encode(secBlock.bytes)}")
+
     fstBlock.bytes sameElements secBlock.bytes shouldBe true
   }
 
