@@ -19,9 +19,9 @@ object TransferTransactionSerializer {
     val newTypeStr = new String(newBytes.slice(Ints.BYTES, Ints.BYTES + newTypeLength))
 
     newTypeStr match {
-      case "PolyTransfer" => PolyTransferSerializer.parseBytes(newBytes).get
-      case "ArbitTransfer" => ArbitTransferSerializer.parseBytes(newBytes).get
-      case "AssetTransfer" => AssetTransferSerializer.parseBytes(newBytes).get
+      case "PolyTransfer" => PolyTransferSerializer.decode(newBytes).get
+      case "ArbitTransfer" => ArbitTransferSerializer.decode(newBytes).get
+      case "AssetTransfer" => AssetTransferSerializer.decode(newBytes).get
     }
   }
 }

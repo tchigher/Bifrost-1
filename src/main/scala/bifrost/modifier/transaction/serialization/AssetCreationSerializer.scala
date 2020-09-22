@@ -78,42 +78,46 @@ object AssetCreationSerializer extends BifrostSerializer[AssetCreation] {
     )
     val typeLength = Ints.fromByteArray(bytes.take(Ints.BYTES))
     val typeStr = new String(bytes.slice(Ints.BYTES, Ints.BYTES + typeLength))
-
-    require(typeStr == "AssetCreation")
-
     var numReadBytes = Ints.BYTES + typeLength
     val bytesWithoutType = bytes.slice(numReadBytes, bytes.length)
 
     val Array(fee: Long, timestamp: Long) = (0 until 2).map { i =>
       Longs.fromByteArray(bytesWithoutType.slice(i * Longs.BYTES, (i + 1) * Longs.BYTES))
     }.toArray
+
     numReadBytes = 2 * Longs.BYTES
 
     val sigLength = Ints.fromByteArray(bytesWithoutType.slice(numReadBytes, numReadBytes + Ints.BYTES))
+
     numReadBytes += Ints.BYTES
 
     val toLength = Ints.fromByteArray(bytesWithoutType.slice(numReadBytes, numReadBytes + Ints.BYTES))
+
     numReadBytes += Ints.BYTES
 
     val assetCodeLen: Int = Ints.fromByteArray(bytesWithoutType.slice(numReadBytes, numReadBytes + Ints.BYTES))
+
     numReadBytes += Ints.BYTES
 
     val assetCode: String = new String(
       bytesWithoutType.slice(numReadBytes, numReadBytes + assetCodeLen)
     )
+
     numReadBytes += assetCodeLen
 
-    val issuer = PublicKey25519Proposition(bytesWithoutType.slice(numReadBytes,
+    val hub = PublicKey25519Proposition(bytesWithoutType.slice(numReadBytes,
       numReadBytes + Constants25519.PubKeyLength))
+
     numReadBytes += Constants25519.PubKeyLength
 
-    val signatures = (0 until sigLength) map { i =>
-      (PublicKey25519Proposition(bytesWithoutType.slice(numReadBytes + i * (Curve25519.KeyLength + Curve25519.SignatureLength),
-        numReadBytes + i * (Curve25519.KeyLength + Curve25519.SignatureLength) + Curve25519.KeyLength)),
-        Signature25519(bytesWithoutType.slice(numReadBytes + i * (Curve25519.KeyLength + Curve25519.SignatureLength) + Curve25519.KeyLength,
-          numReadBytes + (i+1) * (Curve25519.KeyLength + Curve25519.SignatureLength))))
-    }
-    numReadBytes += sigLength * (Curve25519.SignatureLength + Curve25519.KeyLength)
+    val signatures: Map[PublicKey25519Proposition, Signature25519] = (0 until sigLength).map { i =>
+      val sig: Signature25519 = Signature25519(bytesWithoutType.slice(numReadBytes + i * Curve25519.SignatureLength,
+        numReadBytes + (i + 1) * Curve25519.SignatureLength))
+
+      hub -> sig
+    }.toMap
+
+    numReadBytes += sigLength * Curve25519.SignatureLength
 
     val elementLength = Longs.BYTES + Curve25519.KeyLength
 
@@ -125,6 +129,16 @@ object AssetCreationSerializer extends BifrostSerializer[AssetCreation] {
       (PublicKey25519Proposition(pk), v)
     }
 
-    AssetCreation(to, signatures.toMap, assetCode, issuer, fee, timestamp, data)
+
+
+    //    val dataLen: Int = Ints.fromByteArray(bytesWithoutType.slice(bytesWithoutType.length - Ints.BYTES, bytesWithoutType.length))
+    //    val data: String = new String(
+    //      bytes.slice(bytesWithoutType.length - Ints.BYTES - dataLen, bytesWithoutType.length - Ints.BYTES)
+    //    )
+
+    // TODO: Jing - see if the signature and proposition checks out
+    val assetCreation: AssetCreation = AssetCreation(to, signatures, assetCode, hub, fee, timestamp, data)
+    AssetCreation.validate(assetCreation)
+    assetCreation
   }
 }

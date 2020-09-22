@@ -79,12 +79,10 @@ object BlockSerializer extends BifrostSerializer[Block] {
 
     val generatorBox = BoxSerializer.decode(bytes.slice(numBytesRead, numBytesRead + generatorBoxLen.toInt)).get.asInstanceOf[ArbitBox]
 
-    val inflation = bytes.slice(numBytesRead + generatorBoxLen.toInt, numBytesRead + generatorBoxLen.toInt + Longs.BYTES)
+    val signature = Signature25519(bytes.slice(numBytesRead + generatorBoxLen.toInt,
+      numBytesRead + generatorBoxLen.toInt + Signature25519.SignatureSize))
 
-    val signature = Signature25519(bytes.slice(numBytesRead + generatorBoxLen.toInt + Longs.BYTES,
-      numBytesRead + generatorBoxLen.toInt + Longs.BYTES + Signature25519.SignatureSize))
-
-    numBytesRead += generatorBoxLen.toInt + Longs.BYTES + Signature25519.SignatureSize
+    numBytesRead += generatorBoxLen.toInt + Signature25519.SignatureSize
 
     val numTxExpected = Ints.fromByteArray(bytes.slice(numBytesRead, numBytesRead + Ints.BYTES))
     numBytesRead += Ints.BYTES

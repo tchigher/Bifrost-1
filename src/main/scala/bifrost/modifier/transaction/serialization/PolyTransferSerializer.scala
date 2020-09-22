@@ -8,7 +8,10 @@ import bifrost.modifier.transaction.bifrostTransaction.Transaction.Nonce
 import bifrost.utils.Extensions._
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 
-object PolyTransferSerializer extends BifrostSerializer[PolyTransfer] {
+import scala.util.Try
+import com.google.common.primitives.Ints
+
+object PolyTransferSerializer extends BifrostSerializer[PolyTransfer] with TransferSerializer {
 
   override def serialize(obj: PolyTransfer, w: Writer): Unit = {
     /* from: IndexedSeq[(PublicKey25519Proposition, Nonce)] */
@@ -69,5 +72,18 @@ object PolyTransferSerializer extends BifrostSerializer[PolyTransfer] {
     val data: String = r.getIntString()
 
     PolyTransfer(from, to, signatures, fee, timestamp, data)
+  }
+
+  //TODO: Jing - remove
+  def decode(bytes: Array[Byte]): Try[PolyTransfer] = Try {
+    val params = parametersParseBytes(bytes)
+    val dataLen: Int = Ints.fromByteArray(bytes.slice(bytes.length - Ints.BYTES, bytes.length))
+    val data: String = new String(
+      bytes.slice(bytes.length - Ints.BYTES - dataLen, bytes.length - Ints.BYTES)
+    )
+
+    val polyTransfer = PolyTransfer(params._1, params._2, params._3, params._4, params._5, data)
+    PolyTransfer.validate(polyTransfer)
+    polyTransfer
   }
 }

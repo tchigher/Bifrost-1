@@ -8,7 +8,11 @@ import bifrost.modifier.transaction.bifrostTransaction.Transaction.Nonce
 import bifrost.utils.Extensions._
 import bifrost.utils.serialization.{BifrostSerializer, Reader, Writer}
 
-object AssetTransferSerializer extends BifrostSerializer[AssetTransfer] {
+import scala.util.Try
+import com.google.common.primitives.Ints
+import bifrost.modifier.box.proposition.Constants25519
+
+object AssetTransferSerializer extends BifrostSerializer[AssetTransfer] with TransferSerializer {
 
   override def serialize(obj: AssetTransfer, w: Writer): Unit = {
     /* from: IndexedSeq[(PublicKey25519Proposition, Nonce)] */
@@ -77,5 +81,28 @@ object AssetTransferSerializer extends BifrostSerializer[AssetTransfer] {
     val assetCode: String = r.getIntString()
 
     AssetTransfer(from, to, signatures, issuer, assetCode, fee, timestamp, data)
+  }
+
+  def decode(bytes: Array[Byte]): Try[AssetTransfer] = Try {
+    val params = parametersParseBytes(bytes)
+
+    val dataLen: Int = Ints.fromByteArray(bytes.slice(bytes.length - Ints.BYTES, bytes.length))
+    val data: String = new String(
+      bytes.slice(bytes.length - Ints.BYTES - dataLen, bytes.length - Ints.BYTES)
+    )
+
+    val assetCodeLen: Int = Ints.fromByteArray(bytes.slice(bytes.length - Ints.BYTES - dataLen - Ints.BYTES, bytes.length - Ints.BYTES - dataLen))
+    val assetCode: String = new String(
+      bytes.slice(bytes.length - Ints.BYTES - assetCodeLen - Ints.BYTES - dataLen, bytes.length - Ints.BYTES - dataLen - Ints.BYTES)
+    )
+
+    val issuer: PublicKey25519Proposition = PublicKey25519Proposition(
+      bytes.slice(bytes.length - Ints.BYTES - assetCodeLen - Ints.BYTES - dataLen - Constants25519.PubKeyLength,
+        bytes.length - Ints.BYTES - assetCodeLen - Ints.BYTES - dataLen)
+    )
+
+    val assetTransfer = AssetTransfer(params._1, params._2, params._3, issuer, assetCode, params._4, params._5, data)
+    AssetTransfer.validate(assetTransfer)
+    assetTransfer
   }
 }

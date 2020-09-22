@@ -11,7 +11,7 @@ import scala.util.Try
 //TODO: Jing - remove
 object ProgramTransactionSerializer {
 
-  override def decode(bytes: Array[Byte]): Try[ProgramTransaction] = Try {
+  def decode(bytes: Array[Byte]): Try[ProgramTransaction] = Try {
 
     val typeLength = Ints.fromByteArray(bytes.take(Ints.BYTES))
     val typeStr = new String(bytes.slice(Ints.BYTES, Ints.BYTES + typeLength))
