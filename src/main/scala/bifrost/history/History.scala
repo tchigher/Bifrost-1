@@ -11,7 +11,7 @@ import bifrost.modifier.box.proposition.PublicKey25519Proposition
 import bifrost.modifier.transaction.bifrostTransaction.Transaction
 import bifrost.network.message.BifrostSyncInfo
 import bifrost.nodeView.NodeViewModifier
-import bifrost.nodeView.NodeViewModifier.{ModifierTypeId, bytesToId, idToBytes}
+import bifrost.nodeView.NodeViewModifier.ModifierTypeId
 import bifrost.settings.AppSettings
 import bifrost.utils.{BifrostEncoding, Logging}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
@@ -176,37 +176,10 @@ class History(val storage: Storage, settings: AppSettings, validators: Seq[Block
     */
   override def openSurfaceIds(): Seq[ModifierId] =
     if (isEmpty) {
-      Seq(bytesToId(History.GenesisParentId))
+      Seq(ModifierId(History.GenesisParentId))
     } else {
       Seq(bestBlockId)
     } // TODO return sequence of exposed endpoints?
-
-
-  //TODO used in tests, but should replace with HistoryReader.continuationIds
-  /**
-    * Gather blocks from after `from` that should be added to the chain
-    *
-    * @param from the list of known blocks from which to gather continuation
-    * @param size the number of blocks to return after `from`
-    * @return
-    */
-  def continuationIds(from: Seq[(ModifierTypeId, ModifierId)],
-                               size: Int): Option[Seq[(ModifierTypeId, ModifierId)]] = {
-
-    /* Whether m is a genesis block or is in `from` */
-    def inList(m: Block): Boolean = idInList(m.id) || isGenesis(m)
-
-    def idInList(id: ModifierId): Boolean = from.exists(f => f._2 == id)
-
-    /* Extend chain back until end of `from` is found, then return <size> blocks continuing from that point */
-    chainBack(bestBlock, inList) match {
-      case Some(chain) if chain.exists(id => idInList(id._2)) => Some(chain.take(size))
-      case Some(_) =>
-        log.warn("Found chain without ids from remote")
-        None
-      case _ => None
-    }
-  }
 
   /**
     * Return specified number of Bifrost blocks, ordered back from last one
@@ -319,10 +292,10 @@ class History(val storage: Storage, settings: AppSettings, validators: Seq[Block
       case Some(value) =>
         if (f(storage.bloomOf(current).get)) loop(value, current +: acc) else loop(value, acc)
       case None =>
-        if (f(storage.bloomOf(current).get)) (current +: acc).map(bytesToId(_)) else acc.map(bytesToId(_))
+        if (f(storage.bloomOf(current).get)) (current +: acc).map(ModifierId(_)) else acc.map(ModifierId(_))
     }
 
-    loop(idToBytes(storage.bestBlockId), Seq())
+    loop(storage.bestBlockId.hashBytes, Seq())
   }
 
   def bloomFilter(queryBloomTopics: IndexedSeq[Array[Byte]]): Seq[Transaction] = {
@@ -460,13 +433,39 @@ class History(val storage: Storage, settings: AppSettings, validators: Seq[Block
     }
   }
 
+  //TODO used in tests, but should replace with HistoryReader.continuationIds
+  /**
+    * Gather blocks from after `from` that should be added to the chain
+    *
+    * @param from the list of known blocks from which to gather continuation
+    * @param size the number of blocks to return after `from`
+    * @return
+    */
+  def continuationIds(from: Seq[(ModifierTypeId, ModifierId)],
+                      size: Int): Option[Seq[(ModifierTypeId, ModifierId)]] = {
+
+    /* Whether m is a genesis block or is in `from` */
+    def inList(m: Block): Boolean = idInList(m.id) || isGenesis(m)
+
+    def idInList(id: ModifierId): Boolean = from.exists(f => f._2 == id)
+
+    /* Extend chain back until end of `from` is found, then return <size> blocks continuing from that point */
+    chainBack(bestBlock, inList) match {
+      case Some(chain) if chain.exists(id => idInList(id._2)) => Some(chain.take(size))
+      case Some(_) =>
+        log.warn("Found chain without ids from remote")
+        None
+      case _ => None
+    }
+  }
+
   /**
     * Ids of modifiers, that node with info should download and apply to synchronize
     */
   override def continuationIds(info: BifrostSyncInfo, size: Int): ModifierIds = {
-    if(isEmpty) {
+    if (isEmpty) {
       info.startingPoints
-    } else if(info.lastBlockIds.isEmpty) {
+    } else if (info.lastBlockIds.isEmpty) {
       val heightFrom = Math.min(height, size)
       val block = storage.modifierById(storage.idAtHeight(heightFrom)).get
       chainBack(block, _ ⇒ false, size).get
@@ -520,7 +519,7 @@ class History(val storage: Storage, settings: AppSettings, validators: Seq[Block
 //    */
   /*def idsAtHeight(height: Int): Seq[ModifierId] =
     storage.getIndex(heightIdsKey(height: Int))
-      .getOrElse(Array()).grouped(32).map(bytesToId).toSeq
+      .getOrElse(Array()).grouped(32).map(ModifierId).toSeq
    */
 }
 
