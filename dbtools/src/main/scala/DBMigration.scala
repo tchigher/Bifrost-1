@@ -1,133 +1,70 @@
-import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream}
-
-import bifrost.crypto.Signature25519
 import bifrost.history.History
+import bifrost.state.State
 import bifrost.modifier.ModifierId
-import bifrost.modifier.block.Block
-import bifrost.modifier.box.ArbitBox
-import bifrost.modifier.box.serialization.BoxSerializer
+import bifrost.modifier.block.{Block, BlockSerializer}
 import bifrost.settings.{AppSettings, StartupOpts}
 import bifrost.utils.Logging
-import com.google.common.primitives.Longs
-import io.circe.syntax._
-import io.iohk.iodb.ByteArrayWrapper
-import scopt.OParser
 import scorex.crypto.encode.Base58
+import io.iohk.iodb.ByteArrayWrapper
 
-import scala.collection.mutable.ListBuffer
-import scala.util.{Success, Try}
+import scala.collection.mutable.ArrayBuffer
 
 object DBMigration extends Logging {
 
-  //TODO add raw bytes field to error block json
-  //TODO include block height in block json
+  private def migrate(oldSettings: AppSettings, newSettings: AppSettings): Unit = {
+    var listBlockId: ArrayBuffer[Array[Byte]] = ArrayBuffer[Array[Byte]]()
+    val oldHistory: History = History.readOrGenerate(oldSettings)
+    val newHistory: History = History.readOrGenerate(newSettings)
+//    val newState: State = State.readOrGenerate(newSettings, callFromGenesis = true, newHistory)
+    var blockId: ModifierId = oldHistory.bestBlockId
+    var height: Long = oldHistory.height
+    var start = System.nanoTime()
 
-  case class ExtractorConfig(config: String = "testnet-private.json",
-                             output: File = new File("chain.json"),
-                             errorLog: File = new File("error.json"))
+    println(s"---------------${oldSettings.dataDir}")
 
-  private lazy val extractorParser = {
-    val builder = OParser.builder[ExtractorConfig]
-    import builder._
-    OParser.sequence(
-      programName("extract"),
-      head("Bifrost Block Extractor", "1.1"),
-      opt[String]('c', "config")
-          .action((x, c) => c.copy(config = x))
-          .text("Node config file path"),
-      opt[File]('o', "output")
-          .action((x, c) => c.copy(output = x))
-          .text("File to save output to")
-    )
-  }
+    log.info(s"Blockchain height is ${height}, blockId: ${Base58.encode(blockId.hashBytes)}")
 
-  //noinspection ScalaStyle
-  private def extractToJson(outStream: OutputStream, errStream: OutputStream, history: History, blockId: ModifierId): (Int, Int, Block.BlockId) = {
-    history.storage.modifierById(blockId) match {
-      case Some(block) =>
-        val blockJson = block.json
-        val bytes = block.json.deepMerge(Map(
-          "blockNumber"-> history.storage.heightOf(blockId).get.toString,
-          "blockDifficulty" -> history.storage.difficultyOf(blockId).get.toString).asJson).toString.getBytes ++ ",\n".getBytes
-        outStream.write(bytes)
-        (bytes.length, 0, block.parentId)
-      case None =>
-        val blockBytes = history.storage.storage.get(ByteArrayWrapper(blockId.hashBytes)).get.data.tail
-        val parentId = ModifierId(blockBytes.slice(0, Block.blockIdLength))
-        log.info(s"heightOf: ${history.storage.heightOf(blockId)}")
-        log.info(s"parentId: ${ByteArrayWrapper(parentId.hashBytes)}")
-        val Array(timestamp: Long, generatorBoxLen: Long) = (0 until 2).map {
-          i => Longs.fromByteArray(blockBytes.slice(Block.blockIdLength + i * Longs.BYTES, Block.blockIdLength + (i + 1) * Longs.BYTES))
-        }.toArray
-        log.info(s"timestamp: $timestamp")
-        log.info(s"generatorBoxLen: $generatorBoxLen")
-        val version = blockBytes.slice(Block.blockIdLength + 2*Longs.BYTES, Block.blockIdLength + 2*Longs.BYTES + 1).head
-        log.info(s"version: $version")
-        var numBytesRead = Block.blockIdLength + Longs.BYTES * 2 + 1
-        val generatorBox = BoxSerializer.parseBytes(blockBytes.slice(numBytesRead, numBytesRead + generatorBoxLen.toInt)).get.asInstanceOf[ArbitBox]
-        numBytesRead += generatorBoxLen.toInt
-        log.info(s"generatorBox: ${generatorBox.json}")
-        if(version > 2) {
-          val inflation = blockBytes.slice(numBytesRead, numBytesRead + Longs.BYTES)
-          numBytesRead += Longs.BYTES
-        }
-        val signature = Signature25519(blockBytes.slice(numBytesRead, numBytesRead + Signature25519.SignatureSize))
+    while(!(blockId.hashBytes sameElements History.GenesisParentId) && height > 1059465) {
+      val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(blockId.hashBytes)).map { bw =>
+        val bytes = bw.data
+        BlockSerializer.decode(bytes.tail).get
+      }.get
 
-        val regeneratedBlock = Block(parentId, timestamp, generatorBox, signature, Seq(), version)
-        log.info(s"${regeneratedBlock}")
-        val bytes = regeneratedBlock.json.toString.getBytes ++ ",\n".getBytes
-        val rawBytes = regeneratedBlock.json.deepMerge(Map(
-          "blockNumber" -> history.storage.heightOf(blockId).get.toString,
-          "blockDifficulty" -> history.storage.difficultyOf(blockId).get.toString,
-          "rawBytes" -> Base58.encode(regeneratedBlock.bytes)).asJson).toString.getBytes ++ ",\n".getBytes
-        outStream.write(bytes)
-        errStream.write(rawBytes)
-        (bytes.length, rawBytes.length, regeneratedBlock.parentId)
+      listBlockId += blockId.hashBytes
+      println(s"------${height}---------${Base58.encode(blockId.hashBytes)}------${Base58.encode(currentBlock.serializedId)}")
+      blockId = currentBlock.parentId
+
+      height = height - 1
     }
-  }
 
-  private def extract(outputFile: File, errFile: File, settings: AppSettings): Unit = {
-    Try(new FileOutputStream(outputFile), new FileOutputStream(errFile)) match {
-      case Success((output, err)) =>
-        val readBytes = ListBuffer(0, 0)
-        val outStream = new BufferedOutputStream(output)
-        val errStream = new BufferedOutputStream(err)
+    val duration = (System.nanoTime() - start) / 1e9d
 
-        val history = History.readOrGenerate(settings)
-        var blockId = history.bestBlockId
-        val height = history.height
-        val start = System.nanoTime()
+    log.info(s"Found ${listBlockId.size} blockIds in $duration seconds")
 
-        log.info(s"Blockchain height is ${height}")
+    start = System.nanoTime()
 
-        while(!(blockId == History.GenesisParentId)) {
-          val bytes: (Int, Int, Block.BlockId) = extractToJson(outStream, errStream, history, blockId)
-
-          readBytes(0) += bytes._1
-          readBytes(1) += bytes._2
-
-          blockId = bytes._3
-        }
-
-        val duration = (System.nanoTime() - start) / 1e9d
-
-        log.info(s"Extracted $height blocks in $duration seconds")
-
-        outStream.flush()
-        errStream.flush()
-        outStream.close()
-        errStream.close()
+    for (bid <- listBlockId) {
+      val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
+        val bytes = bw.data
+        BlockSerializer.decode(bytes.tail).get
+      }.get
+      println(s"-------${Base58.encode(bid)}-----${Base58.encode((currentBlock.serializedId))}")
+//      newHistory.append(currentBlock)
+//      state.applyModifier(currentBlock)
     }
+
+    log.info(s"Migrated ${listBlockId.size} blocks in $duration seconds")
   }
 
   def main(args: Array[String]): Unit = {
-    OParser.parse(extractorParser, args, ExtractorConfig()) match {
-      case Some(config) =>
-        val settings: AppSettings = AppSettings.read(StartupOpts(Some(config.config), None))
+    println("------------Start-------------")
 
-        extract(config.output, config.errorLog, settings)
+    val oldSettingsFilename = "dbtools/src/main/resources/oldData.conf"
+    val oldSettings: AppSettings = AppSettings.read(StartupOpts(Some(oldSettingsFilename), None))
 
-      case _ =>
-    }
+    val newSettingsFilename = "dbtools/src/main/resources/newData.conf"
+    val newSettings: AppSettings = AppSettings.read(StartupOpts(Some(newSettingsFilename), None))
+
+    migrate(oldSettings, newSettings)
   }
 }
