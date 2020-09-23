@@ -4,6 +4,7 @@ import bifrost.modifier.ModifierId
 import bifrost.modifier.block.{Block, BlockSerializer}
 import bifrost.settings.{AppSettings, StartupOpts}
 import bifrost.utils.Logging
+import com.google.common.primitives.Longs
 import scorex.crypto.encode.Base58
 import io.iohk.iodb.ByteArrayWrapper
 
@@ -48,9 +49,13 @@ object DBMigration extends Logging {
         val bytes = bw.data
         BlockSerializer.decode(bytes.tail).get
       }.get.copy(parentId = newHistory.bestBlockId)
-      println(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}")
+      val currentDifficulty: Long = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
+        val bytes = bw.data
+        Longs.fromByteArray(bytes)
+      }.get
+      println(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
       height = height + 1
-      newHistory = newHistory.append(currentBlock).get._1
+      newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
       newState = newState.applyModifier(currentBlock).get
     }
 
