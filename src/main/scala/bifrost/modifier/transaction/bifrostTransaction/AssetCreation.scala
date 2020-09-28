@@ -40,21 +40,21 @@ case class AssetCreation (to: IndexedSeq[(PublicKey25519Proposition, Long)],
     Longs.toByteArray(fee)
   )
 
-   override lazy val newBoxes: Traversable[Box] = to
-     .filter(toInstance => toInstance._2 > 0L)
-     .zipWithIndex
-     .map {
-     case ((prop, value), idx) =>
-       val nonce = AssetCreation.nonceFromDigest(FastCryptographicHash(
-         "AssetCreation".getBytes ++
-           prop.pubKeyBytes ++
-           issuer.pubKeyBytes ++
-           assetCode.getBytes ++
-           hashNoNonces ++
-           Ints.toByteArray(idx)
-       ))
-       AssetBox(prop, nonce, value, assetCode, issuer, data)
-     }
+  override lazy val newBoxes: Traversable[Box] = to
+   .filter(toInstance => toInstance._2 > 0L)
+   .zipWithIndex
+   .map {
+   case ((prop, value), idx) =>
+     val nonce = AssetCreation.nonceFromDigest(FastCryptographicHash(
+       "AssetCreation".getBytes ++
+         prop.pubKeyBytes ++
+         issuer.pubKeyBytes ++
+         assetCode.getBytes ++
+         hashNoNonces ++
+         Ints.toByteArray(idx)
+     ))
+     AssetBox(prop, nonce, value, assetCode, issuer, data)
+   }
 
   override lazy val json: Json = Map(
     "txHash" -> Base58.encode(id.hashBytes).asJson,
