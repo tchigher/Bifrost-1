@@ -63,7 +63,7 @@ object DBMigration extends Logging {
 
     val idSource = Source.fromFile(".bifrost/blockIds/bids.txt")
 
-    idSource.getLines.take(2570).foreach{ line =>
+    idSource.getLines.foreach{ line =>
       val bid: Array[Byte] = Base58.decode(line).get
       val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
         val bytes = bw.data
@@ -76,7 +76,7 @@ object DBMigration extends Logging {
       println(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
       height = height + 1
       newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
-//      newState = newState.applyModifier(currentBlock).get
+      newState = newState.applyModifier(currentBlock).get
       parentBlockId = currentBlock.id
     }
 
@@ -86,29 +86,29 @@ object DBMigration extends Logging {
     height -= 1
 
     /* Compare data in history */
-    var oldBlockId = ModifierId(Base58.decode("F8WXWNWeFFvDP7ii4d3QEn4wRe1ZrsajmhrGEtvA9mG6").get)
-    var newBlockId = newHistory.bestBlockId
-    println(s"----new:${Base58.encode(newHistory.bestBlockId.hashBytes)}")
-    while(!(oldBlockId.hashBytes sameElements History.GenesisParentId) && height > 2500) {
-      val oldBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(oldBlockId.hashBytes)).map { bw =>
-        val bytes = bw.data
-        BlockSerializer.decode(bytes.tail).get
-      }.get
-
-      val newBlock: Block = newHistory.storage.modifierById(newBlockId).get
-
-      println(s"\n\n------${height}---------${Base58.encode(oldBlock.serializedId)}------${Base58.encode(newBlock.serializedId)}")
-      oldBlockId = oldBlock.parentId
-      newBlockId = newBlock.parentId
-
-      println("================================================")
-      println(oldBlock.json)
-      println("----------------")
-      println(newBlock.json)
-      println("================================================")
-
-      height = height - 1
-    }
+//    var oldBlockId = ModifierId(Base58.decode("F8WXWNWeFFvDP7ii4d3QEn4wRe1ZrsajmhrGEtvA9mG6").get)
+//    var newBlockId = newHistory.bestBlockId
+//    println(s"----new:${Base58.encode(newHistory.bestBlockId.hashBytes)}")
+//    while(!(oldBlockId.hashBytes sameElements History.GenesisParentId) && height > 2500) {
+//      val oldBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(oldBlockId.hashBytes)).map { bw =>
+//        val bytes = bw.data
+//        BlockSerializer.decode(bytes.tail).get
+//      }.get
+//
+//      val newBlock: Block = newHistory.storage.modifierById(newBlockId).get
+//
+//      println(s"\n\n------${height}---------${Base58.encode(oldBlock.serializedId)}------${Base58.encode(newBlock.serializedId)}")
+//      oldBlockId = oldBlock.parentId
+//      newBlockId = newBlock.parentId
+//
+//      println("================================================")
+//      println(oldBlock.json)
+//      println("----------------")
+//      println(newBlock.json)
+//      println("================================================")
+//
+//      height = height - 1
+//    }
   }
 
   def main(args: Array[String]): Unit = {
