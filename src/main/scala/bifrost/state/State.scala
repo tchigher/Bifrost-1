@@ -594,8 +594,7 @@ case class State( storage: LSMStore,
         ) -> ByteArrayWrapper(Longs.toByteArray(timestamp)))
       )
 
-      val newSt =
-        State(storage, newVersion, timestamp, history, pbr, tbr, nodeKeys)
+      val newSt = State(storage, newVersion, timestamp, history, pbr, tbr, nodeKeys)
 
       boxIdsToRemove.foreach(box =>
         require(

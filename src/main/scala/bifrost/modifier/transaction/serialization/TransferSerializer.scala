@@ -49,7 +49,8 @@ trait TransferSerializer {
 
     val signaturePairs: Map[PublicKey25519Proposition, Signature25519] = (publicKeys zip signatures).toMap
 
-      numBytesRead += fromLength * elementLength
+    numBytesRead += fromLength * elementLength
+
     val to = (0 until toLength) map { i =>
       val pk = bytes.slice(numBytesRead + i * elementLength, numBytesRead + (i + 1) * elementLength - Longs.BYTES)
       val v = Longs.fromByteArray(
