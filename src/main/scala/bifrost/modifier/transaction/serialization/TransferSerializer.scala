@@ -3,6 +3,7 @@ package bifrost.modifier.transaction.serialization
 import bifrost.crypto.Signature25519
 import bifrost.modifier.box.proposition.PublicKey25519Proposition
 import com.google.common.primitives.{Ints, Longs}
+import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.Curve25519
 
 //TODO: Jing - remove
@@ -58,6 +59,11 @@ trait TransferSerializer {
       )
       (PublicKey25519Proposition(pk), v)
     }
+
+    //TODO: Jing - remove later
+    println("#############box: prop - Val")
+    to.foreach(pair => println(s"${Base58.encode(pair._1.pubKeyBytes)}--${pair._2}"))
+
     (from, to, signaturePairs, fee, timestamp)
   }
 }
