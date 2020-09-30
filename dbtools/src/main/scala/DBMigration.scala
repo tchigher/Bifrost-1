@@ -76,6 +76,7 @@ object DBMigration extends Logging {
       println(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
       height = height + 1
       newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
+      println(s"${currentBlock.json}")
       newState = newState.applyModifier(currentBlock).get
       parentBlockId = currentBlock.id
     }

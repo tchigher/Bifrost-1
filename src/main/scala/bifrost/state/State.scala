@@ -565,8 +565,9 @@ case class State( storage: LSMStore,
 
       val timestamp: Long = changes.asInstanceOf[StateChanges].timestamp
 
-      if (storage.lastVersionID.isDefined)
-        boxIdsToRemove.foreach(i => require(closedBox(i.data).isDefined))
+      //TODO: Jing - not checking this for DB migration
+//      if (storage.lastVersionID.isDefined)
+//        boxIdsToRemove.foreach(i => require(closedBox(i.data).isDefined))
 
       //TokenBoxRegistry must be updated before state since it uses the boxes from state that are being removed in the update
       if (tbr != null)
@@ -582,6 +583,9 @@ case class State( storage: LSMStore,
           keyFilteredBoxesToAdd
         )
 
+      val toRemove: Set[String] = boxIdsToRemove.map(baw => Base58.encode(baw.data))
+      val toAdd: Set[(String, String)] = boxesToAdd.map(baw => (Base58.encode(baw._1.data), Base58.encode(baw._2.data)))
+      println(s"****newVersion:${Base58.encode(newVersion.hashBytes)}----toRemove:$toRemove----toAdd:$toAdd")
       storage.update(
         ByteArrayWrapper(newVersion.hashBytes),
         boxIdsToRemove,
