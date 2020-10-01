@@ -73,10 +73,13 @@ object DBMigration extends Logging {
         val bytes = bw.data
         Longs.fromByteArray(bytes)
       }.get
-      println(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
+      log.debug(s"----------------------------------------------------------------------------------------------------------------------Height:$height")
+      if (height % 1000 == 0) {
+        log.debug(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
+      }
       height = height + 1
       newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
-      println(s"${currentBlock.json}")
+//      println(s"${currentBlock.json}")
       newState = newState.applyModifier(currentBlock).get
       parentBlockId = currentBlock.id
     }

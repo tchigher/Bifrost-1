@@ -586,7 +586,7 @@ case class State( storage: LSMStore,
       //TODO: Jing - remove later
       val toRemove: Set[String] = boxIdsToRemove.map(baw => Base58.encode(baw.data))
       val toAdd: Set[(String, String)] = boxesToAdd.map(baw => (Base58.encode(baw._1.data), Base58.encode(baw._2.data)))
-      println(s"****newVersion:${Base58.encode(newVersion.hashBytes)}----toRemove:$toRemove----toAdd:$toAdd")
+//      log.debug(s"****newVersion:${Base58.encode(newVersion.hashBytes)}----toRemove:$toRemove----toAdd:$toAdd")
 
       storage.update(
         ByteArrayWrapper(newVersion.hashBytes),
