@@ -1,7 +1,7 @@
 package bifrost.modifier.transaction.bifrostTransaction
 
-import bifrost.crypto.{ FastCryptographicHash, Signature25519 }
-import bifrost.modifier.box.PublicKeyNoncedBox
+import bifrost.crypto.{FastCryptographicHash, Signature25519}
+import bifrost.modifier.box.{BoxUnlocker, PublicKeyNoncedBox}
 import bifrost.modifier.box.proposition.PublicKey25519Proposition
 import bifrost.modifier.transaction.bifrostTransaction.Transaction.Nonce
 import com.google.common.primitives.Longs
@@ -21,12 +21,29 @@ abstract class TransferTransaction ( val from              : IndexedSeq[(PublicK
     PublicKeyNoncedBox.idFromBox(prop, nonce)
   }
 
-  lazy val hashNoNonces: FastCryptographicHash.Digest = FastCryptographicHash(
+  //TODO: Jing - remove after use
+  lazy val unlockers: Traversable[BoxUnlocker[PublicKey25519Proposition]] = boxIdsToOpen.zip(signatures).map {
+    case (boxId, signature) =>
+      new BoxUnlocker[PublicKey25519Proposition] {
+        override val closedBoxId: Array[Byte] = boxId
+        override val boxKey: Signature25519 = signature._2
+      }
+  }
+
+  lazy val hashNoNonces = FastCryptographicHash(
     to.map(_._1.pubKeyBytes).reduce(_ ++ _) ++
-      //Longs.toByteArray(timestamp) ++
-      Longs.toByteArray(fee) ++
-      data.getBytes
-    )
+      unlockers.map(_.closedBoxId).reduce(_ ++ _) ++
+      Longs.toByteArray(timestamp) ++
+      Longs.toByteArray(fee)
+  )
+
+  //TODO: Jing - hashNoNounces above is from Monon
+//  lazy val hashNoNonces: FastCryptographicHash.Digest = FastCryptographicHash(
+//    to.map(_._1.pubKeyBytes).reduce(_ ++ _) ++
+//      //Longs.toByteArray(timestamp) ++
+//      Longs.toByteArray(fee) ++
+//      data.getBytes
+//  )
 
   def json ( txType: String ): Json =
     Map(

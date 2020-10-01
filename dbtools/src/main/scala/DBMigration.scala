@@ -63,7 +63,7 @@ object DBMigration extends Logging {
 
     val idSource = Source.fromFile(".bifrost/blockIds/bids.txt")
 
-    idSource.getLines.foreach{ line =>
+    idSource.getLines.take(12670).foreach{ line =>
       val bid: Array[Byte] = Base58.decode(line).get
       val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
         val bytes = bw.data
