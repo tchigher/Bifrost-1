@@ -52,6 +52,11 @@ object DBMigration extends Logging {
   }
 
   private def migrate(oldSettings: AppSettings, newSettings: AppSettings): Unit = {
+
+    /* If new-data data exists, remove before creating new-data */
+    val path: Path = Path(".bifrost/new-data")
+    Try(path.deleteRecursively())
+
     val oldHistory: History = History.readOrGenerate(oldSettings)
     val newHistory: History = History.readOrGenerate(newSettings)
     var newState: State = State.readOrGenerate(newSettings, callFromGenesis = true, newHistory)
@@ -63,7 +68,7 @@ object DBMigration extends Logging {
 
     val idSource = Source.fromFile(".bifrost/blockIds/bids.txt")
 
-    idSource.getLines.take(12670).foreach{ line =>
+    idSource.getLines.foreach{ line =>
       val bid: Array[Byte] = Base58.decode(line).get
       val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
         val bytes = bw.data
@@ -74,9 +79,7 @@ object DBMigration extends Logging {
         Longs.fromByteArray(bytes)
       }.get
       log.debug(s"----------------------------------------------------------------------------------------------------------------------Height:$height")
-      if (height % 1000 == 0) {
-        log.debug(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
-      }
+//      log.debug(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
       height = height + 1
       newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
 //      println(s"${currentBlock.json}")
@@ -123,10 +126,6 @@ object DBMigration extends Logging {
 
     val newSettingsFilename = "dbtools/src/main/resources/newData.conf"
     val newSettings: AppSettings = AppSettings.read(StartupOpts(Some(newSettingsFilename), None))
-
-    /* If new-data data exists, remove before creating new-data */
-    val path: Path = Path(".bifrost/new-data")
-    Try(path.deleteRecursively())
 
 //    getIds(oldSettings)
     migrate(oldSettings, newSettings)
