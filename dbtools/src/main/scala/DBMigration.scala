@@ -19,16 +19,18 @@ import scala.io.Source
 object DBMigration extends Logging {
 
   private def getIds(oldSettings: AppSettings): Unit = {
+
     /* If new-data data exists, remove before creating new-data */
     val path: Path = Path(".bifrost/blockIds/bids.txt")
     Try(path.deleteRecursively())
 
+    val writer = new PrintWriter(new File(".bifrost/blockIds/bids.txt"))
     var idList: ArrayBuffer[String] = ArrayBuffer[String]()
     val oldHistory: History = History.readOrGenerate(oldSettings)
     var blockId: ModifierId = oldHistory.bestBlockId
     var height: Long = oldHistory.height
-    val writer = new PrintWriter(new File(".bifrost/blockIds/bids.txt"))
     val start = System.nanoTime()
+
     log.info(s"Blockchain height is ${height}, blockId: ${Base58.encode(blockId.hashBytes)}")
 
     while(!(blockId.hashBytes sameElements History.GenesisParentId)) {
@@ -57,18 +59,16 @@ object DBMigration extends Logging {
     val path: Path = Path(".bifrost/new-data")
     Try(path.deleteRecursively())
 
+    val idsFile = Source.fromFile(".bifrost/blockIds/bids.txt")
     val oldHistory: History = History.readOrGenerate(oldSettings)
     val newHistory: History = History.readOrGenerate(newSettings)
-    var newState: State = State.readOrGenerate(newSettings, callFromGenesis = true, newHistory)
-    var height: Long = oldHistory.height
+    val newState: State = State.readOrGenerate(newSettings, callFromGenesis = true, newHistory)
+    var height: Long = 1
     val start = System.nanoTime()
 
-    height = 1
     var parentBlockId: ModifierId = ModifierId(History.GenesisParentId)
 
-    val idSource = Source.fromFile(".bifrost/blockIds/bids.txt")
-
-    idSource.getLines.foreach{ line =>
+    idsFile.getLines.foreach{ line =>
       val bid: Array[Byte] = Base58.decode(line).get
       val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
         val bytes = bw.data
@@ -79,47 +79,19 @@ object DBMigration extends Logging {
         Longs.fromByteArray(bytes)
       }.get
       log.debug(s"----------------------------------------------------------------------------------------------------------------------Height:$height")
-//      log.debug(s"Height:$height----BlockId:${Base58.encode(bid)}----BlockSerializedId:${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}----Difficulty:$currentDifficulty")
       height = height + 1
       newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
-//      println(s"${currentBlock.json}")
-      newState = newState.applyModifier(currentBlock).get
+      newState.applyModifierOnState(currentBlock)
       parentBlockId = currentBlock.id
     }
 
-    idSource.close()
+    idsFile.close()
     val duration = (System.nanoTime() - start) / 1e9d
-    log.info(s"Migrated blocks in $duration seconds")
     height -= 1
-
-    /* Compare data in history */
-//    var oldBlockId = ModifierId(Base58.decode("F8WXWNWeFFvDP7ii4d3QEn4wRe1ZrsajmhrGEtvA9mG6").get)
-//    var newBlockId = newHistory.bestBlockId
-//    println(s"----new:${Base58.encode(newHistory.bestBlockId.hashBytes)}")
-//    while(!(oldBlockId.hashBytes sameElements History.GenesisParentId) && height > 2500) {
-//      val oldBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(oldBlockId.hashBytes)).map { bw =>
-//        val bytes = bw.data
-//        BlockSerializer.decode(bytes.tail).get
-//      }.get
-//
-//      val newBlock: Block = newHistory.storage.modifierById(newBlockId).get
-//
-//      println(s"\n\n------${height}---------${Base58.encode(oldBlock.serializedId)}------${Base58.encode(newBlock.serializedId)}")
-//      oldBlockId = oldBlock.parentId
-//      newBlockId = newBlock.parentId
-//
-//      println("================================================")
-//      println(oldBlock.json)
-//      println("----------------")
-//      println(newBlock.json)
-//      println("================================================")
-//
-//      height = height - 1
-//    }
+    log.info(s"Migrated $height blocks in $duration seconds")
   }
 
   def main(args: Array[String]): Unit = {
-    println("------------Start-------------")
 
     val oldSettingsFilename = "dbtools/src/main/resources/oldData.conf"
     val oldSettings: AppSettings = AppSettings.read(StartupOpts(Some(oldSettingsFilename), None))
