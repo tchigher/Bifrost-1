@@ -31,8 +31,11 @@ import scala.util.{Failure, Success, Try}
   * @param history           Main box storage
   */
 case class State( storage: LSMStore,
-                  override val version: VersionTag,
-                  timestamp: Long,
+                  //TODO: Jing - Changed to vars for migration
+                  // override val version: VersionTag,
+                  // timestamp: Long,
+                  var version: VersionTag,
+                  var timestamp: Long,
                   history: History,
                   pbr: ProgramBoxRegistry = null,
                   tbr: TokenBoxRegistry = null,
@@ -603,6 +606,93 @@ case class State( storage: LSMStore,
 
   // todo: JAA - shouldn't this be read in from a settings file or is it even needed (can we remove it from the trait?)
   override def maxRollbackDepth: Int = 10
+
+  def applyModifierOnState(mod: BPMOD): Unit = {
+    mod match {
+      case b: Block ⇒
+        StateChanges(b).flatMap(cs ⇒ applyChangesToState(cs, b.id))
+      //case a: Any ⇒
+      // Failure(new Exception(s"unknown modifier $a"))
+    }
+  }
+
+  // not private because of tests
+  def applyChangesToState(changes: GSC, newVersion: VersionTag): Try[Unit] =
+    Try {
+
+      //Filtering boxes pertaining to public keys specified in settings file
+      //Note YT - Need to handle MofN Proposition separately
+      val keyFilteredBoxesToAdd =
+      if (nodeKeys != null)
+        changes.toAppend
+          .filter(b =>
+            nodeKeys.contains(ByteArrayWrapper(b.proposition.bytes))
+          )
+      else
+        changes.toAppend
+
+      val keyFilteredBoxIdsToRemove =
+        if (nodeKeys != null)
+          changes.boxIdsToRemove
+            .flatMap(closedBox)
+            .filter(b =>
+              nodeKeys.contains(ByteArrayWrapper(b.proposition.bytes))
+            )
+            .map(b => b.id)
+        else
+          changes.boxIdsToRemove
+
+      val boxesToAdd = keyFilteredBoxesToAdd
+        .map(b => ByteArrayWrapper(b.id) -> ByteArrayWrapper(b.bytes))
+
+      /* This seeks to avoid the scenario where there is remove and then update of the same keys */
+      val boxIdsToRemove =
+        (keyFilteredBoxIdsToRemove -- boxesToAdd.map(_._1.data))
+          .map(ByteArrayWrapper.apply)
+
+      log.debug(
+        s"Update BifrostState from version $lastVersionString to version $newVersion. " +
+          s"Removing boxes with ids ${boxIdsToRemove.map(b => Base58.encode(b.data))}, " +
+          s"adding boxes ${boxesToAdd.map(b => Base58.encode(b._1.data))}"
+      )
+
+      timestamp = changes.asInstanceOf[StateChanges].timestamp
+
+      /* Removed this check for migration */
+      // if (storage.lastVersionID.isDefined)
+      //   boxIdsToRemove.foreach(i => require(closedBox(i.data).isDefined))
+
+      //TokenBoxRegistry must be updated before state since it uses the boxes from state that are being removed in the update
+      if (tbr != null)
+        tbr.updateFromState(
+          newVersion,
+          keyFilteredBoxIdsToRemove,
+          keyFilteredBoxesToAdd
+        )
+      if (pbr != null)
+        pbr.updateFromState(
+          newVersion,
+          keyFilteredBoxIdsToRemove,
+          keyFilteredBoxesToAdd
+        )
+
+      storage.update(
+        ByteArrayWrapper(newVersion.hashBytes),
+        boxIdsToRemove,
+        boxesToAdd + (ByteArrayWrapper(
+          FastCryptographicHash("timestamp".getBytes)
+        ) -> ByteArrayWrapper(Longs.toByteArray(timestamp)))
+      )
+
+      version = newVersion
+
+      boxIdsToRemove.foreach(box =>
+        require(
+          closedBox(box.data).isEmpty,
+          s"Box $box is still in state"
+        )
+      )
+    }
 }
 
 object State extends Logging {
