@@ -54,6 +54,15 @@ object DBMigration extends Logging {
     log.info(s"Found all blockIds in $duration seconds")
   }
 
+  private def runtimer(starttime: Long, duration: Long): Boolean = {
+    if ((System.nanoTime() - starttime) / 1e9d >= duration) {
+      false
+    } else {
+      println("reached limit ******************************************")
+      true
+    }
+  }
+
   private def migrate(oldSettings: AppSettings, newSettings: AppSettings, startNew: Boolean): Unit = {
 
     if (startNew) {
@@ -73,32 +82,39 @@ object DBMigration extends Logging {
 
     val start = System.nanoTime()
 
-    idsFile.getLines.drop(newHistory.height.toInt).take(10000).foreach{ line =>
-      val bid: Array[Byte] = Base58.decode(line).get
-      height += 1
+    val targetTime: Long = 16500
+    val targetNum: Int = 10000
+    idsFile.getLines
+      .drop(newHistory.height.toInt)
+//      .take(targetNum)
+      .takeWhile(_ => runtimer(start, targetTime))
+      .foreach{ line =>
 
-      val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
-        val bytes = bw.data
-        BlockSerializer.decode(bytes.tail).get
-      }.get.copy(parentId = parentBlockId)
+        val bid: Array[Byte] = Base58.decode(line).get
+        height += 1
 
-      val currentDifficulty: Long = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
-        val bytes = bw.data
-        Longs.fromByteArray(bytes)
-      }.get
+        val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
+          val bytes = bw.data
+          BlockSerializer.decode(bytes.tail).get
+        }.get.copy(parentId = parentBlockId)
 
-      Try {
-        newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
-        newState.applyModifierOnState(currentBlock)
-      } match {
-        case Success(_) => log.debug("-------------------------------------------------------------------"+
-          s"----------------------------------------Height:$height")
-        case Failure(_) => log.warn(s"Failed to append and apply block $height !!!!!!!")
-      }
+        val currentDifficulty: Long = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
+          val bytes = bw.data
+          Longs.fromByteArray(bytes)
+        }.get
 
-      parentBlockId = currentBlock.id
+        Try {
+          newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
+          newState.applyModifierOnState(currentBlock)
+        } match {
+          case Success(_) => log.debug("-------------------------------------------------------------------"+
+            s"----------------------------------------Height:$height")
+          case Failure(_) => log.warn(s"Failed to append and apply block $height !!!!!!!")
+        }
 
-      /* log.debug(s"^^^^^^^^^^$height-----------\n${currentBlock.json}") */
+        parentBlockId = currentBlock.id
+
+        /* log.debug(s"^^^^^^^^^^$height-----------\n${currentBlock.json}") */
     }
 
     idsFile.close()
