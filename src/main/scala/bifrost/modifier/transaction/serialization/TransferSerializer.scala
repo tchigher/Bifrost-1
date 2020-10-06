@@ -60,10 +60,6 @@ trait TransferSerializer {
       (PublicKey25519Proposition(pk), v)
     }
 
-    //TODO: Jing - remove later
-    println("#############box: prop - Val")
-    to.foreach(pair => println(s"${Base58.encode(pair._1.pubKeyBytes)}--${pair._2}"))
-
     (from, to, signaturePairs, fee, timestamp)
   }
 }

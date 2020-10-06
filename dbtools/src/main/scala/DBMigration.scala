@@ -41,7 +41,8 @@ object DBMigration extends Logging {
 
       idList += Base58.encode(blockId.hashBytes)
 
-      println(s"------${height}---------${Base58.encode(blockId.hashBytes)}------${Base58.encode(currentBlock.serializedId)}----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}")
+      log.info(s"----${height}----${Base58.encode(blockId.hashBytes)}----${Base58.encode(currentBlock.serializedId)}" +
+        s"----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}")
       blockId = currentBlock.parentId
 
       height = height - 1
@@ -65,13 +66,16 @@ object DBMigration extends Logging {
     val oldHistory: History = History.readOrGenerate(oldSettings)
     val newHistory: History = History.readOrGenerate(newSettings)
     val newState: State = State.readOrGenerate(newSettings, callFromGenesis = true, newHistory)
-    var height: Long = newHistory.height
+    var parentBlockId: ModifierId = newHistory.bestBlockId
+    var height = newHistory.height.toInt
+
+    log.debug(s"initial height is $height -- ${Base58.encode(newHistory.bestBlockId.hashBytes)}")
+
     val start = System.nanoTime()
 
-    var parentBlockId: ModifierId = ModifierId(History.GenesisParentId)
-
-    idsFile.getLines.drop(height.toInt).foreach{ line =>
+    idsFile.getLines.drop(newHistory.height.toInt).take(10000).foreach{ line =>
       val bid: Array[Byte] = Base58.decode(line).get
+      height += 1
 
       val currentBlock: Block = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
         val bytes = bw.data
@@ -83,24 +87,24 @@ object DBMigration extends Logging {
         Longs.fromByteArray(bytes)
       }.get
 
-      height = height + 1
-
       Try {
         newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
         newState.applyModifierOnState(currentBlock)
       } match {
-        case Success(_) => log.debug(s"----------------------------------------------------------------------------------------------------------------------Height:$height")
+        case Success(_) => log.debug("-------------------------------------------------------------------"+
+          s"----------------------------------------Height:$height")
         case Failure(_) => log.warn(s"Failed to append and apply block $height !!!!!!!")
       }
 
       parentBlockId = currentBlock.id
+
+      /* log.debug(s"^^^^^^^^^^$height-----------\n${currentBlock.json}") */
     }
 
     idsFile.close()
     val duration = (System.nanoTime() - start) / 1e9d
-    height -= 1
 
-    log.info(s"Migrated $height blocks in $duration seconds")
+    log.debug(s"Finished at height:$height in $duration seconds")
   }
 
   def main(args: Array[String]): Unit = {
