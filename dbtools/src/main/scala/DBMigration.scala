@@ -83,11 +83,11 @@ object DBMigration extends Logging {
     val start = System.nanoTime()
 
     val targetTime: Long = 16500
-    val targetNum: Int = 10000
+    val targetNum: Int = 10
     idsFile.getLines
       .drop(newHistory.height.toInt)
-//      .take(targetNum)
-      .takeWhile(_ => runtimer(start, targetTime))
+      .take(targetNum)
+//      .takeWhile(_ => runtimer(start, targetTime))
       .foreach{ line =>
 
         val bid: Array[Byte] = Base58.decode(line).get
@@ -98,17 +98,14 @@ object DBMigration extends Logging {
           BlockSerializer.decode(bytes.tail).get
         }.get.copy(parentId = parentBlockId)
 
-        val currentDifficulty: Long = oldHistory.storage.storage.get(ByteArrayWrapper(bid)).map { bw =>
-          val bytes = bw.data
-          Longs.fromByteArray(bytes)
-        }.get
+        val currentDifficulty: Long = oldHistory.storage.difficultyOf(ModifierId(bid)).get
 
         Try {
           newHistory.storage.update(currentBlock, currentDifficulty, isBest = true)
           newState.applyModifierOnState(currentBlock)
         } match {
           case Success(_) => log.debug("-------------------------------------------------------------------"+
-            s"----------------------------------------Height:$height")
+            s"----------------------------------------Height:$height----Diff:$currentDifficulty")
           case Failure(_) => log.warn(s"Failed to append and apply block $height !!!!!!!")
         }
 
