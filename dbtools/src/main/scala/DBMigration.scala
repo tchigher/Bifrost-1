@@ -55,12 +55,8 @@ object DBMigration extends Logging {
   }
 
   private def runtimer(starttime: Long, duration: Long): Boolean = {
-    if ((System.nanoTime() - starttime) / 1e9d >= duration) {
-      false
-    } else {
-      println("reached limit ******************************************")
-      true
-    }
+    if ((System.nanoTime() - starttime) / 1e9d >= duration) false
+    else true
   }
 
   private def migrate(oldSettings: AppSettings, newSettings: AppSettings, startNew: Boolean): Unit = {
@@ -111,7 +107,7 @@ object DBMigration extends Logging {
 
         parentBlockId = currentBlock.id
 
-        /* log.debug(s"^^^^^^^^^^$height-----------\n${currentBlock.json}") */
+//        log.debug(s"^^^^^^^^^^$height-----------\n${currentBlock.json}")
     }
 
     idsFile.close()
