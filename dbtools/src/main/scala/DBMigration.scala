@@ -10,7 +10,7 @@ import io.iohk.iodb.ByteArrayWrapper
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.io.Path
 import scala.util.{Failure, Success, Try}
-import java.io.{File, FileWriter, PrintWriter}
+import java.io.{FileWriter, PrintWriter}
 
 import scala.io.Source
 
@@ -24,25 +24,35 @@ object DBMigration extends Logging {
     val idFileName: String = ".bifrost/blockIds/bids.txt"
     val statusFile: String = ".bifrost/blockIds/status.txt"
     val newDataDir: String = ".bifrost/new-data"
-    val startNew: Boolean = true
+    val startNew: Boolean = false
     val historyOrState: Boolean = true // history: true | state: false
-    var prevHeight: Int = -1
 
     /* getIds(oldSettings) */
 
-    val statusSource = Source.fromFile(statusFile)
-    val status = statusSource.getLines().toList
-    if (status.size > 0 && status.head == "running")
-      log.warn("Last run didn't finish! Remove new-data and clear status.txt")
-    else {
-      if (status.size == 0) {
+    if (!new java.io.File(statusFile).exists()){
+      if (!new java.io.File(newDataDir).exists())
+        migrate(oldSettings, newSettings, idFileName, statusFile, newDataDir, startNew, historyOrState, 0)
+      else
+        log.warn(s"${Console.YELLOW} new-data exists but no status.txt found in /blockIds/, delete new-data!!!!!!!!!${Console.RESET}")
+    } else {
+      val statusSource = Source.fromFile(statusFile)
+      val status = statusSource.getLines().toList
+
+      if (status.size <= 0) {
         require(!new java.io.File(newDataDir).exists())
-        prevHeight = 0
-      } else if(status.head == "finished") {
-        if(startNew) prevHeight = 0
-        else prevHeight = status(1).toInt
+
+        migrate(oldSettings, newSettings, idFileName, statusFile, newDataDir, startNew, historyOrState, 0)
+      } else {
+        if (status.head == "running") {
+          log.warn(s"${Console.YELLOW}Last run didn't finish!!!!!!!! Remove new-data and clear status.txt${Console.RESET}")
+        } else if (status.head == "finished") {
+          var prevHeight = -1
+          if (startNew) prevHeight = 0
+          else prevHeight = status(1).toInt
+
+          migrate(oldSettings, newSettings, idFileName, statusFile, newDataDir, startNew, historyOrState, prevHeight)
+        }
       }
-      migrate(oldSettings, newSettings, idFileName, statusFile, newDataDir, startNew, historyOrState, prevHeight)
     }
   }
 
@@ -54,26 +64,31 @@ object DBMigration extends Logging {
       Try(newDataPath.deleteRecursively())
     }
 
-    log.debug(s"!!!!!!!!!status height:$prevHeight")
+    log.debug(s"-----------height from status file:$prevHeight")
 
     val idsFile = Source.fromFile(idFileName)
     val oldHistory: History = History.readOrGenerate(oldSettings)
     val newHistory: History = History.readOrGenerate(newSettings)
     val newState: State = State.readOrGenerate(newSettings, callFromGenesis = true, newHistory)
     var parentBlockId: ModifierId = newHistory.bestBlockId
-    var height = newHistory.height.toInt
+
+    var height =
+      if(historyOrState) newHistory.height.toInt
+      else prevHeight
+
+    val initialHeight = height
     val start = System.nanoTime()
 
     val statusStart = new PrintWriter(new FileWriter(statusFile, false))
     statusStart.write("running")
     statusStart.close()
 
-    log.debug(s"initial height is $height -- ${Base58.encode(newHistory.bestBlockId.hashBytes)}")
+    log.debug(s"initial height is $height")
 
     val targetTime: Long = 1600
-    val targetNum: Int = 5
+    val targetNum: Int = 1000
     idsFile.getLines
-      .drop(newHistory.height.toInt)
+      .drop(initialHeight)
       .take(targetNum)
       // .takeWhile(_ => runtimer(start, targetTime))
       .foreach{ line =>
@@ -115,10 +130,8 @@ object DBMigration extends Logging {
   private def getIds(oldSettings: AppSettings, idFileName: String): Unit = {
 
     /* If new-data data exists, remove before creating new-data */
-    val path: Path = Path(idFileName)
-    Try(path.deleteRecursively())
 
-    val writer = new PrintWriter(new File(idFileName))
+    val writer = new PrintWriter(new FileWriter(idFileName, false))
     var idList: ArrayBuffer[String] = ArrayBuffer[String]()
     val oldHistory: History = History.readOrGenerate(oldSettings)
     var blockId: ModifierId = oldHistory.bestBlockId
