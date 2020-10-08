@@ -663,18 +663,20 @@ case class State( storage: LSMStore,
       //   boxIdsToRemove.foreach(i => require(closedBox(i.data).isDefined))
 
       //TokenBoxRegistry must be updated before state since it uses the boxes from state that are being removed in the update
-      if (tbr != null)
-        tbr.updateFromState(
-          newVersion,
-          keyFilteredBoxIdsToRemove,
-          keyFilteredBoxesToAdd
-        )
-      if (pbr != null)
-        pbr.updateFromState(
-          newVersion,
-          keyFilteredBoxIdsToRemove,
-          keyFilteredBoxesToAdd
-        )
+
+      //TODO: Jing - Removed because we dont need these in data migration
+//      if (tbr != null)
+//        tbr.updateFromState(
+//          newVersion,
+//          keyFilteredBoxIdsToRemove,
+//          keyFilteredBoxesToAdd
+//        )
+//      if (pbr != null)
+//        pbr.updateFromState(
+//          newVersion,
+//          keyFilteredBoxIdsToRemove,
+//          keyFilteredBoxesToAdd
+//        )
 
       storage.update(
         ByteArrayWrapper(newVersion.hashBytes),
