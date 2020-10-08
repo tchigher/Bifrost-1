@@ -24,7 +24,7 @@ object DBMigration extends Logging {
     val idFileName: String = ".bifrost/blockIds/bids.txt"
     val statusFile: String = ".bifrost/blockIds/status.txt"
     val newDataDir: String = ".bifrost/new-data"
-    val startNew: Boolean = false
+    val startNew: Boolean = true
     val historyOrState: Boolean = true // history: true | state: false
 
     /* getIds(oldSettings) */
@@ -76,7 +76,7 @@ object DBMigration extends Logging {
       if(historyOrState) newHistory.height.toInt
       else prevHeight
 
-    val initialHeight = height
+    val initialHeight: Int = height
     val start = System.nanoTime()
 
     val statusStart = new PrintWriter(new FileWriter(statusFile, false))
@@ -89,7 +89,7 @@ object DBMigration extends Logging {
     val targetNum: Int = 1000
     idsFile.getLines
       .drop(initialHeight)
-      .take(targetNum)
+      // .take(targetNum)
       // .takeWhile(_ => runtimer(start, targetTime))
       .foreach{ line =>
         val bid: Array[Byte] = Base58.decode(line).get
@@ -148,7 +148,7 @@ object DBMigration extends Logging {
 
       idList += Base58.encode(blockId.hashBytes)
 
-      log.info(s"----${height}----${Base58.encode(blockId.hashBytes)}----${Base58.encode(currentBlock.serializedId)}" +
+      log.info(s"----$height----${Base58.encode(blockId.hashBytes)}----${Base58.encode(currentBlock.serializedId)}" +
         s"----BlockParentId:${Base58.encode(currentBlock.parentId.hashBytes)}")
       blockId = currentBlock.parentId
 
