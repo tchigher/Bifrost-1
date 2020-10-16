@@ -42,7 +42,8 @@ trait BifrostGenerators extends CoreGenerators with Logging {
 
   private val settingsFilename = "src/test/resources/test.conf"
   val settings: AppSettings = AppSettings.read(StartupOpts(Some(settingsFilename), None))
-  val settings_version0: AppSettings = AppSettings.read(StartupOpts(Some(settingsFilename), None)).copy(version = "0.0.0")
+  val settings_version0: AppSettings = AppSettings.read(StartupOpts(Some(settingsFilename), None))
+                                                  .copy(application = settings_version0.application.copy(version = "0.0.0"))
 
   def unfoldLeft[A, B](seed: B)(f: B => Option[(A, B)]): Seq[A] = {
     f(seed) match {

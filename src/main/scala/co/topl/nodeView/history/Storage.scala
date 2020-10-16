@@ -22,8 +22,8 @@ import scala.util.{Failure, Try}
 
 class Storage( private[history] val storage: LSMStore, val settings: AppSettings) extends Logging {
   /* ------------------------------- Cache Initialization ------------------------------- */
-  private val cacheExpire: Int = settings.cacheExpire
-  private val cacheSize: Int = settings.cacheSize
+  private val cacheExpire: Int = settings.application.cacheExpire
+  private val cacheSize: Int = settings.application.cacheSize
   type KEY = ByteArrayWrapper
   type VAL = ByteArrayWrapper
 

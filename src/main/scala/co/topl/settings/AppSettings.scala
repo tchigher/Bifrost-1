@@ -64,19 +64,20 @@ case class ForgingSettings ( MinimumDifficulty   : Long,
                              keyFileDir          : Option[String]
                            )
 
-case class AppSettings (
-                         dataDir        : Option[String],
-                         logDir         : Option[String],
-                         enablePBR      : Boolean,
-                         enableTBR      : Boolean,
-                         nodeKeys       : Option[Set[String]],
-                         version        : String,
-                         cacheExpire    : Int,
-                         cacheSize      : Int,
-                         network        : NetworkSettings,
-                         forgingSettings: ForgingSettings,
-                         restApi        : RESTApiSettings,
-                         ntp            : NetworkTimeProviderSettings
+case class ApplicationSettings(dataDir    : Option[String],
+                               logDir     : Option[String],
+                               enablePBR  : Boolean,
+                               enableTBR  : Boolean,
+                               nodeKeys   : Option[Set[String]],
+                               version    : String,
+                               cacheExpire: Int,
+                               cacheSize  : Int)
+
+case class AppSettings ( application: ApplicationSettings,
+                         network    : NetworkSettings,
+                         forging    : ForgingSettings,
+                         restApi    : RESTApiSettings,
+                         ntp        : NetworkTimeProviderSettings
                        )
 
 object AppSettings extends Logging with SettingsReaders {

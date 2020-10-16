@@ -583,7 +583,7 @@ object History extends Logging {
 
   def readOrGenerate(settings: AppSettings): History = {
     /** Setup persistent on-disk storage */
-    val dataDir = settings.dataDir.ensuring(_.isDefined, "A data directory must be specified").get
+    val dataDir = settings.application.dataDir.ensuring(_.isDefined, "A data directory must be specified").get
     val iFile = new File(s"$dataDir/blocks")
     iFile.mkdirs()
     val blockStorageDB = new LSMStore(iFile)
