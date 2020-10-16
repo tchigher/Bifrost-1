@@ -41,7 +41,7 @@ class NodeViewSynchronizer[
 ](
   networkControllerRef: ActorRef,
   viewHolderRef: ActorRef,
-  networkSettings: NetworkSettings,
+  settings: NetworkSettings,
   appContext: AppContext
 )(implicit ec: ExecutionContext)
     extends Synchronizer
@@ -53,7 +53,7 @@ class NodeViewSynchronizer[
   import co.topl.nodeView.GenericNodeViewHolder.ReceivableMessages.{GetNodeViewChanges, ModifiersFromRemote, TransactionsFromRemote}
 
   // the maximum number of inventory modifiers to compare with remote peers
-  protected val desiredInvObjects: Int = networkSettings.desiredInvObjects
+  protected val desiredInvObjects: Int = settings.desiredInvObjects
 
   // serializers for blocks and transactions
   protected val modifierSerializers: Map[ModifierTypeId, BifrostSerializer[_ <: NodeViewModifier]] =
@@ -73,8 +73,8 @@ class NodeViewSynchronizer[
     case (_: ModifiersSpec, data: ModifiersData, remote) => gotRemoteModifiers(data, remote)
   }
 
-  protected val deliveryTracker = new DeliveryTracker(self, context, networkSettings)
-  protected val statusTracker = new SyncTracker(self, context, networkSettings, appContext.timeProvider)
+  protected val deliveryTracker = new DeliveryTracker(self, context, settings)
+  protected val statusTracker = new SyncTracker(self, context, settings, appContext.timeProvider)
 
   protected var historyReaderOpt: Option[HR] = None
   protected var mempoolReaderOpt: Option[MR] = None
@@ -552,7 +552,7 @@ class NodeViewSynchronizer[
     var size = 5 //message type id + message size
     val batch = mods.takeWhile { case (_, modBytes) =>
       size += NodeViewModifier.ModifierIdSize + 4 + modBytes.length
-      size < networkSettings.maxPacketSize
+      size < settings.maxPacketSize
     }
 
     // send the chunk of modifiers to the remote
@@ -688,10 +688,10 @@ object NodeViewSynchronizerRef {
   ](
     networkControllerRef: ActorRef,
     viewHolderRef: ActorRef,
-    networkSettings: NetworkSettings,
+    settings: NetworkSettings,
     appContext: AppContext
   )(implicit system: ActorSystem, ec: ExecutionContext): ActorRef =
-    system.actorOf(props[TX, SI, PMOD, HR, MR](networkControllerRef, viewHolderRef, networkSettings, appContext))
+    system.actorOf(props[TX, SI, PMOD, HR, MR](networkControllerRef, viewHolderRef, settings, appContext))
 
   def props[
     TX <: Transaction,
@@ -702,10 +702,10 @@ object NodeViewSynchronizerRef {
   ](
     networkControllerRef: ActorRef,
     viewHolderRef: ActorRef,
-    networkSettings: NetworkSettings,
+    settings: NetworkSettings,
     appContext: AppContext
   )(implicit ec: ExecutionContext): Props =
-    Props(new NodeViewSynchronizer[TX, SI, PMOD, HR, MR](networkControllerRef, viewHolderRef, networkSettings, appContext))
+    Props(new NodeViewSynchronizer[TX, SI, PMOD, HR, MR](networkControllerRef, viewHolderRef, settings, appContext))
 
   def apply[
     TX <: Transaction,
@@ -717,8 +717,8 @@ object NodeViewSynchronizerRef {
     name: String,
     networkControllerRef: ActorRef,
     viewHolderRef: ActorRef,
-    networkSettings: NetworkSettings,
+    settings: NetworkSettings,
     appContext: AppContext
   )(implicit system: ActorSystem, ec: ExecutionContext): ActorRef =
-    system.actorOf(props[TX, SI, PMOD, HR, MR](networkControllerRef, viewHolderRef, networkSettings, appContext), name)
+    system.actorOf(props[TX, SI, PMOD, HR, MR](networkControllerRef, viewHolderRef, settings, appContext), name)
 }

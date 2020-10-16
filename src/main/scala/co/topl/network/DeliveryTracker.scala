@@ -37,7 +37,7 @@ import scala.util.{Failure, Try}
   */
 class DeliveryTracker( nvsRef: ActorRef,
                        context: ActorContext,
-                       networkSettings: NetworkSettings,
+                       settings: NetworkSettings,
                        ) extends Logging {
 
   protected case class RequestedInfo(peer: Option[ConnectedPeer], cancellable: Cancellable, checks: Int)
@@ -45,8 +45,8 @@ class DeliveryTracker( nvsRef: ActorRef,
   protected class StopExpectingError(mid: ModifierId, checks: Int)
     extends Error(s"Stop expecting $mid} due to exceeded number of retries $checks")
 
-  private val deliveryTimeout: FiniteDuration = networkSettings.deliveryTimeout
-  private val maxDeliveryChecks: Int = networkSettings.maxDeliveryChecks
+  private val deliveryTimeout: FiniteDuration = settings.deliveryTimeout
+  private val maxDeliveryChecks: Int = settings.maxDeliveryChecks
 
   // when a remote peer is asked a modifier we add the requested data to `requested`
   protected val requested: mutable.Map[ModifierId, RequestedInfo] = mutable.Map()

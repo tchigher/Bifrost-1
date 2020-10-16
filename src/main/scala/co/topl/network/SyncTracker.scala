@@ -19,7 +19,7 @@ import scala.concurrent.duration.{FiniteDuration, _}
   */
 class SyncTracker(nvsRef: ActorRef,
                   context: ActorContext,
-                  networkSettings: NetworkSettings,
+                  settings: NetworkSettings,
                   timeProvider: TimeProvider)(implicit ec: ExecutionContext) extends Logging {
 
   import co.topl.utils.TimeProvider.Time
@@ -44,12 +44,12 @@ class SyncTracker(nvsRef: ActorRef,
   }
 
   def maxInterval(): FiniteDuration =
-    if (stableSyncRegime) networkSettings.syncStatusRefreshStable
-    else networkSettings.syncStatusRefresh
+    if (stableSyncRegime) settings.syncStatusRefreshStable
+    else settings.syncStatusRefresh
 
   def minInterval(): FiniteDuration =
-    if (stableSyncRegime) networkSettings.syncIntervalStable
-    else networkSettings.syncInterval
+    if (stableSyncRegime) settings.syncIntervalStable
+    else settings.syncInterval
 
   def updateStatus(peer: ConnectedPeer, status: HistoryComparisonResult): Unit = {
     val seniorsBefore = numOfSeniors()
