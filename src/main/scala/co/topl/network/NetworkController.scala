@@ -22,7 +22,7 @@ import scala.util.{Failure, Success, Try}
  */
 class NetworkController ( settings      : NetworkSettings,
                           peerManagerRef: ActorRef,
-                          appContext: AppContext,
+                          appContext    : AppContext,
                           tcpManager    : ActorRef
                         )( implicit ec: ExecutionContext )
   extends Actor with Logging {
@@ -538,7 +538,7 @@ object NetworkControllerRef {
   def props (
               settings      : NetworkSettings,
               peerManagerRef: ActorRef,
-              appContext: AppContext,
+              appContext    : AppContext,
               tcpManager    : ActorRef
             )( implicit ec: ExecutionContext ): Props = {
     Props(
