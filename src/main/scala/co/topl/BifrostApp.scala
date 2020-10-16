@@ -69,7 +69,7 @@ class BifrostApp(startupOpts: StartupOpts) extends Logging with Runnable {
 
   private val nodeViewHolderRef: ActorRef = NodeViewHolderRef("nodeViewHolder", settings, appContext)
 
-  private val forgerRef: ActorRef = ForgerRef("forger", nodeViewHolderRef, settings.forgingSettings, appContext)
+  private val forgerRef: ActorRef = ForgerRef("forger", nodeViewHolderRef, settings.forging, appContext)
 
   private val nodeViewSynchronizer: ActorRef = NodeViewSynchronizerRef[TX, BSI, PMOD, HIS, MP](
       "nodeViewSynchronizer", networkControllerRef, nodeViewHolderRef, settings.network, appContext)

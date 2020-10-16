@@ -132,7 +132,7 @@ object NodeViewHolder extends Logging {
 
     val genesisBox = ArbitBox(genesisAccountPriv.publicImage, 0, GenesisBalance)
 
-    val genesisBlock = Block.create(History.GenesisParentId, 0L, genesisTxs, genesisBox, genesisAccountPriv, settings.forgingSettings.version)
+    val genesisBlock = Block.create(History.GenesisParentId, 0L, genesisTxs, genesisBox, genesisAccountPriv, settings.forging.version)
 
     assert(genesisBlock.id.toString == "9VX9smBd7Jz56HzTcmY6EZiLfrn7WdxECbsSgNRrPXmu", s"${Console.RED}MALFORMED GENESIS BLOCK! The calculated genesis block " +
       s"with id ${genesisBlock.id} does not match the required block for the chosen network mode.${Console.RESET}")

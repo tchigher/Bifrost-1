@@ -123,7 +123,7 @@ class AssetRPCSpec extends AnyWordSpec
 //          ArbitBox(PublicKey25519Proposition(PublicKey @@ history.bestBlockId.hashBytes), 0L, 10000L),
 //          Signature25519(Signature @@ Array.fill(Curve25519.SignatureLength)(1: Byte)),
 //          Seq(txInstance),
-//          settings.forgingSettings.version
+//          settings.forging.version
 //        )
 //        view().state.applyModifier(tempBlock)
 //        view().pool.remove(txInstance)

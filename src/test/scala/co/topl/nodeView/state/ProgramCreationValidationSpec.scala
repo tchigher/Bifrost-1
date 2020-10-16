@@ -95,7 +95,7 @@ class ProgramCreationValidationSpec extends ProgramSpec {
           ArbitBox(PublicKey25519Proposition(PublicKey @@ Array.fill(Curve25519.KeyLength)(0: Byte)), 0L, 0L),
           Signature25519(Signature @@ Array.fill(Block.signatureLength)(0: Byte)),
           Seq(programCreation),
-          settings.forgingSettings.version
+          settings.forging.version
         )
 
         //val preExistingPolyBoxes: Set[Box] = getPreExistingPolyBoxes(programCreation)
@@ -280,7 +280,7 @@ class ProgramCreationValidationSpec extends ProgramSpec {
           ArbitBox(PublicKey25519Proposition(PublicKey @@ Array.fill(Curve25519.KeyLength)(0: Byte)), scala.util.Random.nextLong(), 0L),
           Signature25519(Signature @@ Array.fill(Block.signatureLength)(0: Byte)),
           Seq(cc),
-          settings.forgingSettings.version
+          settings.forging.version
         )
 
         val necessaryState = StateSpec
