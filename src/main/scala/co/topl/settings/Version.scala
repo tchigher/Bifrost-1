@@ -4,6 +4,12 @@ import co.topl.utils.serialization.{BytesSerializable, _}
 
 /**
   * Version of p2p protocol. Node can only process messages of it's version or lower.
+  *
+  * @param firstDigit: major version(changing client behavior)
+  *
+  * @param secondDigit: minor version(changing user behavior)
+  *
+  * @param thirdDigit: patch (upgrading but not changing behavior)
   */
 case class Version(firstDigit: Byte, secondDigit: Byte, thirdDigit: Byte) extends BytesSerializable with Ordered[Version] {
   override type M = Version
